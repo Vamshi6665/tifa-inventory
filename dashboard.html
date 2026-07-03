@@ -543,6 +543,7 @@
 
   let allItems = [];
   let allCounts = [];
+  let allSchedules = [];
   let expandedState = {};
   let searchTerm = '';
   let showRetired = false;
@@ -606,9 +607,10 @@
   }
 
   async function loadDashboard() {
-    const [{ data: items, error: itemsErr }, { data: counts, error: countsErr }] = await Promise.all([
+    const [{ data: items, error: itemsErr }, { data: counts, error: countsErr }, schedulesResult] = await Promise.all([
       supabaseClient.from('inventory_items').select('*').order('category').order('name'),
       supabaseClient.from('inventory_counts').select('item_id, recorded_value, recorded_at').order('recorded_at'),
+      supabaseClient.from('subcategory_schedules').select('*'),
     ]);
 
     if (itemsErr) {
@@ -616,6 +618,10 @@
       content.innerHTML = `<div class="empty-state"><h2>Couldn't load items</h2><p>${itemsErr.message}</p></div>`;
       return;
     }
+
+    // subcategory_schedules may not exist yet if the SQL migration hasn't
+    // been run — degrade gracefully rather than breaking the whole page.
+    allSchedules = (schedulesResult && schedulesResult.data) ? schedulesResult.data : [];
 
     if (!items || items.length === 0) {
       pageSubtitle.textContent = 'No items yet.';
@@ -736,7 +742,8 @@
 
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
-        html += `<tr class="subcategory-header-row"><td colspan="6">${subcatName}</td></tr>`;
+        const repUnitLabel = subItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label;
+        html += `<tr class="subcategory-header-row"><td colspan="6">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</td></tr>`;
 
         for (const item of subItems) {
           const reorder = needsReorder(item);
@@ -815,12 +822,24 @@
       allItems.filter(i => i.category === item.category && i.subcategory).map(i => i.subcategory)
     )].sort();
 
+    const oldSubcat = item.subcategory || '';
+    const siblingCount = allItems.filter(i => i.category === item.category && (i.subcategory || '') === oldSubcat).length;
+
     cell.innerHTML = `
       <div class="subcat-edit-input-row">
-        <input type="text" id="subcatInput_${itemId}" list="subcatList_${itemId}" value="${item.subcategory ? escapeAttr(item.subcategory) : ''}" placeholder="e.g. Muffins" />
+        <input type="text" id="subcatInput_${itemId}" list="subcatList_${itemId}" value="${item.subcategory ? escapeAttr(item.subcategory) : ''}" placeholder="Subcategory, e.g. Muffins" />
         <datalist id="subcatList_${itemId}">
           ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
         </datalist>
+        <input type="text" id="unitLabelInput_${itemId}" value="${item.unit_label ? escapeAttr(item.unit_label) : ''}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:190px;" />
+      </div>
+      <div style="margin-top:5px; display:flex; align-items:center; gap:6px;">
+        <label style="font-size:10.5px; color: var(--muted); display:flex; align-items:center; gap:4px; font-weight:400;">
+          <input type="checkbox" id="subcatBulkApply_${itemId}" ${siblingCount > 1 ? 'checked' : ''} />
+          Apply to all ${siblingCount} item${siblingCount === 1 ? '' : 's'} currently in "${oldSubcat || 'Uncategorized'}"
+        </label>
+      </div>
+      <div style="margin-top:5px;">
         <button class="edit-save" data-subcat-save="${itemId}">Save</button>
         <button class="edit-cancel" data-subcat-cancel="${itemId}">Cancel</button>
       </div>`;
@@ -837,18 +856,45 @@
 
   async function saveSubcatEdit(itemId) {
     const input = document.getElementById(`subcatInput_${itemId}`);
+    const unitInput = document.getElementById(`unitLabelInput_${itemId}`);
+    const bulkApply = document.getElementById(`subcatBulkApply_${itemId}`).checked;
     const newSubcat = input.value.trim();
-
-    const { error } = await supabaseClient
-      .from('inventory_items')
-      .update({ subcategory: newSubcat || null })
-      .eq('id', itemId);
-
-    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    const newUnitLabel = unitInput.value.trim();
 
     const item = allItems.find(i => String(i.id) === String(itemId));
-    if (item) item.subcategory = newSubcat || null;
-    showToast('Subcategory updated.');
+    if (!item) return;
+    const oldSubcat = item.subcategory || '';
+
+    if (bulkApply) {
+      const siblingIds = allItems
+        .filter(i => i.category === item.category && (i.subcategory || '') === oldSubcat)
+        .map(i => i.id);
+
+      const { error } = await supabaseClient
+        .from('inventory_items')
+        .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
+        .in('id', siblingIds);
+
+      if (error) { showToast('Could not save: ' + error.message, true); return; }
+
+      siblingIds.forEach(id => {
+        const it = allItems.find(i => String(i.id) === String(id));
+        if (it) { it.subcategory = newSubcat || null; it.unit_label = newUnitLabel || null; }
+      });
+      showToast(`Updated ${siblingIds.length} item${siblingIds.length === 1 ? '' : 's'}.`);
+    } else {
+      const { error } = await supabaseClient
+        .from('inventory_items')
+        .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
+        .eq('id', itemId);
+
+      if (error) { showToast('Could not save: ' + error.message, true); return; }
+
+      item.subcategory = newSubcat || null;
+      item.unit_label = newUnitLabel || null;
+      showToast('Subcategory updated.');
+    }
+
     render();
   }
 
@@ -1097,141 +1143,177 @@
     }
   }
 
-  // ---------------- Reorder Schedule tab ----------------
+  // ---------------- Reorder Schedule tab (group-level: category + subcategory) ----------------
 
-  function suggestFrequencyForItem(itemId) {
-    const points = allCounts
-      .filter(c => String(c.item_id) === String(itemId))
-      .map(c => ({ date: new Date(c.recorded_at), value: parseValue(c.recorded_value) }))
-      .filter(p => p.value !== null && !isNaN(p.date.getTime()))
-      .sort((a, b) => a.date - b.date);
+  // Reasonable default cadence by category, used when a group has no history
+  // to compute a suggestion from. Based on typical shelf life / turnover for
+  // a gelato and chocolate shop — perishable, frequently-made items lean
+  // weekly; bulk staples and non-perishables lean monthly.
+  const CATEGORY_DEFAULT_FREQUENCY = {
+    'Gelato': 'weekly',
+    'Cookies & Pastries': 'weekly',
+    'Truffles & Chocolates': 'biweekly',
+    'Gelato Supplies': 'biweekly',
+    'Gelato/Drink/Pastry/Chocolate Supplies': 'biweekly',
+    'Covertures, Waffle Mix, Coffee, Water & Soda': 'monthly',
+    'House Supplies': 'monthly',
+  };
 
-    if (points.length < 2) return null;
-
-    const restockGapsDays = [];
-    for (let i = 1; i < points.length; i++) {
-      if (points[i].value > points[i - 1].value) {
-        const gapDays = (points[i].date - (restockGapsDays.lastDate || points[0].date)) / 86400000;
-        if (gapDays > 0) restockGapsDays.push(gapDays);
-        restockGapsDays.lastDate = points[i].date;
-      }
-    }
-
-    let avgGap;
-    if (restockGapsDays.length > 0) {
-      avgGap = restockGapsDays.reduce((a, b) => a + b, 0) / restockGapsDays.length;
-    } else {
-      const totalDays = (points[points.length - 1].date - points[0].date) / 86400000;
-      avgGap = points.length > 1 ? totalDays / (points.length - 1) : null;
-    }
-
-    if (avgGap === null || !isFinite(avgGap) || avgGap <= 0) return null;
-    if (avgGap <= 10) return 'weekly';
-    if (avgGap <= 20) return 'biweekly';
-    if (avgGap <= 45) return 'monthly';
-    return null;
+  function subcatGroupKey(item) {
+    const sub = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : 'Uncategorized';
+    return item.category + '||' + sub;
   }
 
-  function renderSchedule() {
-    const items = activeItems();
-    const buckets = { weekly: [], biweekly: [], monthly: [] };
-    const unassigned = [];
+  function suggestFrequencyForGroup(groupItems) {
+    const perItemSuggestions = [];
+    for (const item of groupItems) {
+      const points = allCounts
+        .filter(c => String(c.item_id) === String(item.id))
+        .map(c => ({ date: new Date(c.recorded_at), value: parseValue(c.recorded_value) }))
+        .filter(p => p.value !== null && !isNaN(p.date.getTime()))
+        .sort((a, b) => a.date - b.date);
 
-    for (const item of items) {
-      if (item.reorder_frequency && buckets[item.reorder_frequency]) {
-        buckets[item.reorder_frequency].push(item);
+      if (points.length < 2) continue;
+
+      const restockGapsDays = [];
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].value > points[i - 1].value) {
+          const gapDays = (points[i].date - (restockGapsDays.lastDate || points[0].date)) / 86400000;
+          if (gapDays > 0) restockGapsDays.push(gapDays);
+          restockGapsDays.lastDate = points[i].date;
+        }
+      }
+
+      let avgGap;
+      if (restockGapsDays.length > 0) {
+        avgGap = restockGapsDays.reduce((a, b) => a + b, 0) / restockGapsDays.length;
       } else {
-        unassigned.push(item);
+        const totalDays = (points[points.length - 1].date - points[0].date) / 86400000;
+        avgGap = totalDays / (points.length - 1);
+      }
+
+      if (isFinite(avgGap) && avgGap > 0) {
+        if (avgGap <= 10) perItemSuggestions.push('weekly');
+        else if (avgGap <= 20) perItemSuggestions.push('biweekly');
+        else if (avgGap <= 45) perItemSuggestions.push('monthly');
       }
     }
+
+    if (perItemSuggestions.length > 0) {
+      const counts = { weekly: 0, biweekly: 0, monthly: 0 };
+      perItemSuggestions.forEach(f => counts[f]++);
+      return Object.keys(counts).reduce((a, b) => (counts[a] >= counts[b] ? a : b));
+    }
+
+    const category = groupItems[0] ? groupItems[0].category : null;
+    return CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
+  }
+
+  async function ensureSchedulesPopulated(groups) {
+    const missing = [];
+    for (const g of groups) {
+      const existing = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
+      if (!existing) {
+        missing.push({
+          category: g.category,
+          subcategory: g.subcategory,
+          reorder_frequency: suggestFrequencyForGroup(g.items),
+        });
+      }
+    }
+    if (missing.length === 0) return;
+
+    const { data, error } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert(missing, { onConflict: 'category,subcategory' })
+      .select();
+
+    if (!error && data) {
+      allSchedules = allSchedules.concat(data);
+    }
+  }
+
+  function buildSubcategoryGroups() {
+    const items = activeItems();
+    const map = {};
+    for (const item of items) {
+      const key = subcatGroupKey(item);
+      if (!map[key]) {
+        const sub = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : 'Uncategorized';
+        map[key] = { category: item.category, subcategory: sub, items: [] };
+      }
+      map[key].items.push(item);
+    }
+    return Object.values(map);
+  }
+
+  async function renderSchedule() {
+    const groups = buildSubcategoryGroups();
+    await ensureSchedulesPopulated(groups);
+
+    const buckets = { weekly: [], biweekly: [], monthly: [] };
+    for (const g of groups) {
+      const sched = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
+      const freq = sched ? sched.reorder_frequency : (CATEGORY_DEFAULT_FREQUENCY[g.category] || 'monthly');
+      if (buckets[freq]) buckets[freq].push(g);
+    }
+
+    const groupRow = (g) => `
+      <div class="schedule-item">
+        <div>
+          <div class="schedule-item-name">${g.subcategory}</div>
+          <div class="schedule-item-cat">${g.category} · ${g.items.length} item${g.items.length === 1 ? '' : 's'}</div>
+        </div>
+        <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
+          <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
+          <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
+          <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
+        </select>
+      </div>`;
 
     const colHtml = (key, label) => {
       const list = buckets[key];
       const rows = list.length === 0
-        ? `<div class="schedule-empty-col">No items assigned.</div>`
-        : list.map(item => `
-          <div class="schedule-item">
-            <div><div class="schedule-item-name">${item.name}</div><div class="schedule-item-cat">${item.category}</div></div>
-            <select class="freq-select" data-reassign="${item.id}">
-              <option value="weekly" ${item.reorder_frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
-              <option value="biweekly" ${item.reorder_frequency === 'biweekly' ? 'selected' : ''}>Biweekly</option>
-              <option value="monthly" ${item.reorder_frequency === 'monthly' ? 'selected' : ''}>Monthly</option>
-              <option value="">Remove from schedule</option>
-            </select>
-          </div>`).join('');
+        ? `<div class="schedule-empty-col">No subcategories assigned.</div>`
+        : list.map(groupRow).join('');
       return `<div class="schedule-col">
         <div class="schedule-col-header ${key}"><span>${label}</span><span>${list.length}</span></div>
         <div class="schedule-col-body">${rows}</div>
       </div>`;
     };
 
-    let html = `
-      <div class="schedule-toolbar">
-        <label for="scheduleAddSelect">Assign an item:</label>
-        <select id="scheduleAddSelect" style="flex:1; min-width:180px;">
-          <option value="">Select item…</option>
-          ${items.map(i => `<option value="${i.id}">${escapeAttr(i.name)} — ${escapeAttr(i.category)}</option>`).join('')}
-        </select>
-        <select id="scheduleAddFreq">
-          <option value="weekly">Weekly</option>
-          <option value="biweekly">Biweekly</option>
-          <option value="monthly">Monthly</option>
-        </select>
-        <button class="btn btn-primary" id="scheduleAddBtn">Add</button>
-      </div>
+    scheduleView.innerHTML = `
+      <p style="font-size:12.5px; color: var(--muted); margin: 0 0 14px;">
+        Scheduling applies to a whole category + subcategory at once — every item inside inherits the
+        same cadence. Suggestions are based on your actual restock history where available, and on
+        typical turnover for the category otherwise. Change any dropdown to override.
+      </p>
       <div class="schedule-grid">
         ${colHtml('weekly', 'Weekly')}
         ${colHtml('biweekly', 'Biweekly')}
         ${colHtml('monthly', 'Monthly')}
       </div>
-      <div class="unassigned-section">
-        <div class="unassigned-header">Unassigned (${unassigned.length})</div>
     `;
 
-    if (unassigned.length === 0) {
-      html += `<div class="schedule-empty-col">Every active item has a reorder schedule.</div>`;
-    } else {
-      for (const item of unassigned) {
-        const suggestion = suggestFrequencyForItem(item.id);
-        html += `<div class="unassigned-item">
-          <div><div class="schedule-item-name">${item.name}</div><div class="schedule-item-cat">${item.category}</div></div>
-          ${suggestion
-            ? `<button class="suggestion-chip" data-apply-suggestion="${item.id}" data-freq="${suggestion}">Suggested: ${suggestion} — apply</button>`
-            : `<span class="no-suggestion">Not enough history to suggest</span>`}
-        </div>`;
-      }
-    }
-
-    html += `</div>`;
-    scheduleView.innerHTML = html;
-
-    document.getElementById('scheduleAddBtn').addEventListener('click', async () => {
-      const itemId = document.getElementById('scheduleAddSelect').value;
-      const freq = document.getElementById('scheduleAddFreq').value;
-      if (!itemId) { showToast('Choose an item first.', true); return; }
-      await assignFrequency(itemId, freq);
-    });
-
-    scheduleView.querySelectorAll('[data-apply-suggestion]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await assignFrequency(btn.getAttribute('data-apply-suggestion'), btn.getAttribute('data-freq'));
-      });
-    });
-
-    scheduleView.querySelectorAll('[data-reassign]').forEach(select => {
+    scheduleView.querySelectorAll('[data-group-reassign]').forEach(select => {
       select.addEventListener('change', async () => {
-        const newFreq = select.value || null;
-        await assignFrequency(select.getAttribute('data-reassign'), newFreq);
+        const [category, subcategory] = select.getAttribute('data-group-reassign').split('|||');
+        await assignGroupFrequency(category, subcategory, select.value);
       });
     });
   }
 
-  async function assignFrequency(itemId, freq) {
-    const { error } = await supabaseClient.from('inventory_items').update({ reorder_frequency: freq }).eq('id', itemId);
+  async function assignGroupFrequency(category, subcategory, freq) {
+    const { data, error } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert([{ category, subcategory, reorder_frequency: freq }], { onConflict: 'category,subcategory' })
+      .select();
+
     if (error) { showToast('Could not update: ' + error.message, true); return; }
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (item) item.reorder_frequency = freq;
-    showToast(freq ? `Set to ${freq}.` : 'Removed from schedule.');
+
+    allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === subcategory));
+    if (data) allSchedules = allSchedules.concat(data);
+    showToast(`${subcategory} set to ${freq}.`);
     renderSchedule();
   }
 
