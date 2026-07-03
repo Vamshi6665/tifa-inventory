@@ -241,12 +241,12 @@
 
   .row-actions { display: flex; align-items: center; gap: 4px; }
   .icon-btn {
-    background: var(--pistachio-tint); border: none; cursor: pointer; padding: 5px 7px;
-    color: var(--pistachio-dark); border-radius: 6px; display: inline-flex; align-items: center; font-size: 13px;
+    background: #ECECE6; border: none; cursor: pointer; padding: 5px 7px;
+    color: #1F1F1C; border-radius: 6px; display: inline-flex; align-items: center; font-size: 13px;
   }
-  .icon-btn:hover { background: var(--pistachio); color: white; }
-  .icon-btn.danger { background: #F2E9E9; color: var(--error-deep); }
-  .icon-btn.danger:hover { background: var(--error-deep); color: white; }
+  .icon-btn:hover { background: #1F1F1C; color: white; }
+  .icon-btn.danger { background: #FBDEDB; color: #C0392B; }
+  .icon-btn.danger:hover { background: #C0392B; color: white; }
 
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
@@ -283,17 +283,39 @@
     padding: 13px 16px; font-size: 13px; font-weight: 700; color: white;
     display: flex; justify-content: space-between; align-items: center;
   }
-  .schedule-col-header.weekly { background: #6E8C3E; }
-  .schedule-col-header.biweekly { background: #8FAE5D; }
-  .schedule-col-header.monthly { background: #B7C99A; color: var(--pistachio-deep); }
+  .schedule-col-header.weekly { background: var(--pistachio-dark); }
+  .schedule-col-header.biweekly { background: var(--pistachio); color: var(--pistachio-deep); }
+  .schedule-col-header.monthly { background: var(--pistachio-tint); color: var(--pistachio-deep); }
   .schedule-col-body { padding: 6px 0; min-height: 60px; }
+
+  .schedule-item-block { border-bottom: 1px solid #F2F0E6; }
   .schedule-item {
-    padding: 9px 16px; border-bottom: 1px solid #F2F0E6; display: flex;
+    padding: 9px 16px; display: flex;
     justify-content: space-between; align-items: center; gap: 8px;
   }
-  .schedule-item-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .schedule-item-toggle {
+    background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 7px;
+    padding: 0; font-family: 'DM Sans', sans-serif; flex: 1; min-width: 0;
+  }
+  .schedule-chevron { font-size: 13px; color: var(--muted); transition: transform 0.12s ease; flex-shrink: 0; }
+  .schedule-chevron.rotated { transform: rotate(90deg); }
+  .schedule-item-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; text-align: left; }
   .schedule-item-cat { font-size: 10.5px; color: var(--muted); }
+  .schedule-low-badge {
+    font-size: 10px; font-weight: 700; background: #FBDEDB; color: var(--error-deep);
+    padding: 1px 7px; border-radius: 20px; flex-shrink: 0;
+  }
   .schedule-empty-col { padding: 20px 16px; font-size: 12px; color: var(--muted); text-align: center; }
+
+  .schedule-subitems { background: #FAFAF5; padding: 4px 16px 8px 34px; }
+  .schedule-subitem {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid #EFEEE6; font-size: 12.5px;
+  }
+  .schedule-subitem:last-child { border-bottom: none; }
+  .schedule-subitem-name { color: var(--pistachio-deep); }
+  .schedule-subitem-low { color: var(--error-deep); font-weight: 700; }
+  .schedule-subitem-zero { color: white; background: var(--error-deep); padding: 1px 6px; border-radius: 8px; font-weight: 700; }
 
   .unassigned-section { background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
   .unassigned-header { padding: 13px 16px; font-size: 13px; font-weight: 700; color: var(--pistachio-deep); border-bottom: 1px solid var(--border); }
@@ -548,6 +570,7 @@
   let searchTerm = '';
   let showRetired = false;
   let currentTab = 'browse';
+  let scheduleExpanded = {};
   let pendingDeleteId = null;
   let activeFilter = null; // null | 'reorder' | 'outofstock'
   let selectedIds = new Set();
@@ -1017,7 +1040,7 @@
   });
 
   function attachEditHandlers(context) {
-    const scope = context === 'sidebar' ? sidebarBody : content;
+    const scope = context === 'sidebar' ? sidebarBody : (context === 'schedule' ? scheduleView : content);
     scope.querySelectorAll('[data-edit-btn]').forEach(btn => {
       btn.addEventListener('click', (e) => { e.stopPropagation(); openEditor(btn.getAttribute('data-edit-btn'), context); });
     });
@@ -1041,6 +1064,7 @@
       row.querySelector('[data-cancel]').addEventListener('click', () => renderSidebar());
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') renderSidebar(); });
     } else {
+      const cancelFn = context === 'schedule' ? renderSchedule : render;
       const cell = document.querySelector(`[data-current-cell="${itemId}"]`);
       if (!cell) return;
       cell.innerHTML = `<div class="edit-input-row">
@@ -1051,8 +1075,8 @@
       const input = document.getElementById(`editInput_${itemId}`);
       input.focus(); input.select();
       cell.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
-      cell.querySelector('[data-cancel]').addEventListener('click', () => render());
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') render(); });
+      cell.querySelector('[data-cancel]').addEventListener('click', () => cancelFn());
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') cancelFn(); });
     }
   }
 
@@ -1238,15 +1262,40 @@
       if (buckets[freq]) buckets[freq].push(g);
     }
 
-    const groupRow = (g) => `
-      <div class="schedule-item">
-        <div class="schedule-item-name">${g.subcategory}</div>
-        <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
-          <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
-          <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
-          <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
-        </select>
+    const groupRow = (g) => {
+      const key = g.category + '|||' + g.subcategory;
+      const isOpen = !!scheduleExpanded[key];
+      const lowInGroup = g.items.filter(needsReorder).length;
+
+      const itemRows = g.items.map(item => {
+        const zero = isZero(item);
+        const reorder = needsReorder(item);
+        const valueClass = zero ? 'schedule-subitem-zero' : (reorder ? 'schedule-subitem-low' : '');
+        return `<div class="schedule-subitem">
+          <span class="schedule-subitem-name">${item.name}</span>
+          <div class="current-cell" data-current-cell="${item.id}">
+            <span data-current-display="${item.id}" class="${valueClass}">${item.current_value ?? '—'}</span>
+            <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div class="schedule-item-block">
+        <div class="schedule-item">
+          <button class="schedule-item-toggle" data-toggle-schedule-group="${escapeAttr(key)}">
+            <i class="ti ti-chevron-right schedule-chevron ${isOpen ? 'rotated' : ''}"></i>
+            <span class="schedule-item-name">${g.subcategory}</span>
+            ${lowInGroup > 0 ? `<span class="schedule-low-badge">${lowInGroup}</span>` : ''}
+          </button>
+          <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
+            <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
+            <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
+            <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
+          </select>
+        </div>
+        ${isOpen ? `<div class="schedule-subitems">${itemRows}</div>` : ''}
       </div>`;
+    };
 
     const colHtml = (key, label) => {
       const list = buckets[key];
@@ -1274,6 +1323,16 @@
         await assignGroupFrequency(category, subcategory, select.value);
       });
     });
+
+    scheduleView.querySelectorAll('[data-toggle-schedule-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-toggle-schedule-group');
+        scheduleExpanded[key] = !scheduleExpanded[key];
+        renderSchedule();
+      });
+    });
+
+    attachEditHandlers('schedule');
   }
 
   async function assignGroupFrequency(category, subcategory, freq) {
