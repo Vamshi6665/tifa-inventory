@@ -10,10 +10,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --pistachio: #8FAE5D;
-    --pistachio-dark: #6E8C3E;
-    --pistachio-deep: #3F5222;
-    --pistachio-tint: #EEF3E1;
+    --pistachio: #A9DD85;
+    --pistachio-dark: #6FBF4A;
+    --pistachio-deep: #2F6B1F;
+    --pistachio-tint: #EEF8E4;
     --page-bg: #FFFFFF;
     --panel-bg: #FBFCF9;
     --amber: #C9862B;
@@ -209,15 +209,15 @@
     text-transform: uppercase; letter-spacing: 0.05em; color: var(--pistachio-dark);
     padding: 7px 16px;
   }
-  tr.subcategory-header-row:hover td { background: var(--pistachio-tint); }
+  tr.subcategory-header-row:hover td { background: #E4F3D4; }
+  .subcat-heading-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .subcat-heading-line .icon-btn { padding: 2px 6px; font-size: 10.5px; opacity: 0; transition: opacity 0.12s ease; }
+  tr.subcategory-header-row:hover .icon-btn { opacity: 1; }
 
-  .subcat-line { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
-  .subcat-text { font-size: 11px; color: var(--muted); }
-  .subcat-line .icon-btn { padding: 2px 5px; font-size: 10.5px; }
   .subcat-edit-input-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
   .subcat-edit-input-row input {
-    width: 140px; padding: 4px 7px; border: 1.5px solid var(--pistachio); border-radius: 5px;
-    font-family: 'DM Sans', sans-serif; font-size: 11.5px;
+    width: 150px; padding: 5px 8px; border: 1.5px solid var(--pistachio); border-radius: 5px;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; text-transform: none; letter-spacing: normal;
   }
 
   .status-pill {
@@ -743,7 +743,14 @@
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
         const repUnitLabel = subItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label;
-        html += `<tr class="subcategory-header-row"><td colspan="6">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</td></tr>`;
+        html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
+          <td colspan="6">
+            <div class="subcat-heading-line">
+              <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
+              <button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>
+            </div>
+          </td>
+        </tr>`;
 
         for (const item of subItems) {
           const reorder = needsReorder(item);
@@ -758,13 +765,7 @@
 
           html += `<tr data-item-id="${item.id}" class="${rowVisible ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
             <td><input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}></td>
-            <td>
-              <div>${item.name}</div>
-              <div class="subcat-line" data-subcat-cell="${item.id}">
-                <span class="subcat-text">${item.subcategory ? escapeAttr(item.subcategory) : 'No subcategory'}</span>
-                <button class="icon-btn" data-edit-subcat="${item.id}" title="Change subcategory"><i class="ti ti-tag"></i></button>
-              </div>
-            </td>
+            <td>${item.name}</td>
             <td>
               <div class="current-cell" data-current-cell="${item.id}">
                 <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
@@ -804,97 +805,76 @@
   }
 
   function attachSubcatHandlers() {
-    document.querySelectorAll('[data-edit-subcat]').forEach(btn => {
+    document.querySelectorAll('[data-edit-group-subcat]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openSubcatEditor(btn.getAttribute('data-edit-subcat'));
+        const [category, subcatName] = btn.getAttribute('data-edit-group-subcat').split('|||');
+        openGroupSubcatEditor(category, subcatName);
       });
     });
   }
 
-  function openSubcatEditor(itemId) {
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (!item) return;
-    const cell = document.querySelector(`[data-subcat-cell="${itemId}"]`);
-    if (!cell) return;
+  function openGroupSubcatEditor(category, subcatName) {
+    const row = document.querySelector(`[data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}"]`);
+    if (!row) return;
+
+    const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === subcatName);
+    if (groupItems.length === 0) return;
+
+    const repUnitLabel = groupItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label || '';
+    const currentName = subcatName === 'Uncategorized' ? '' : subcatName;
 
     const existingSubcats = [...new Set(
-      allItems.filter(i => i.category === item.category && i.subcategory).map(i => i.subcategory)
+      allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
     )].sort();
 
-    const oldSubcat = item.subcategory || '';
-    const siblingCount = allItems.filter(i => i.category === item.category && (i.subcategory || '') === oldSubcat).length;
+    const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
 
-    cell.innerHTML = `
+    row.innerHTML = `<td colspan="6">
       <div class="subcat-edit-input-row">
-        <input type="text" id="subcatInput_${itemId}" list="subcatList_${itemId}" value="${item.subcategory ? escapeAttr(item.subcategory) : ''}" placeholder="Subcategory, e.g. Muffins" />
-        <datalist id="subcatList_${itemId}">
+        <input type="text" id="groupSubcatInput_${uid}" list="groupSubcatList_${uid}" value="${escapeAttr(currentName)}" placeholder="Subcategory name, e.g. Muffins" />
+        <datalist id="groupSubcatList_${uid}">
           ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
         </datalist>
-        <input type="text" id="unitLabelInput_${itemId}" value="${item.unit_label ? escapeAttr(item.unit_label) : ''}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:190px;" />
+        <input type="text" id="groupUnitInput_${uid}" value="${escapeAttr(repUnitLabel)}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:210px;" />
+        <button class="edit-save" data-group-subcat-save="${uid}">Save</button>
+        <button class="edit-cancel" data-group-subcat-cancel="${uid}">Cancel</button>
       </div>
-      <div style="margin-top:5px; display:flex; align-items:center; gap:6px;">
-        <label style="font-size:10.5px; color: var(--muted); display:flex; align-items:center; gap:4px; font-weight:400;">
-          <input type="checkbox" id="subcatBulkApply_${itemId}" ${siblingCount > 1 ? 'checked' : ''} />
-          Apply to all ${siblingCount} item${siblingCount === 1 ? '' : 's'} currently in "${oldSubcat || 'Uncategorized'}"
-        </label>
-      </div>
-      <div style="margin-top:5px;">
-        <button class="edit-save" data-subcat-save="${itemId}">Save</button>
-        <button class="edit-cancel" data-subcat-cancel="${itemId}">Cancel</button>
-      </div>`;
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory.</div>
+    </td>`;
 
-    const input = document.getElementById(`subcatInput_${itemId}`);
-    input.focus(); input.select();
-    cell.querySelector('[data-subcat-save]').addEventListener('click', () => saveSubcatEdit(itemId));
-    cell.querySelector('[data-subcat-cancel]').addEventListener('click', () => render());
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveSubcatEdit(itemId);
+    const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
+    nameInput.focus(); nameInput.select();
+
+    row.querySelector('[data-group-subcat-save]').addEventListener('click', () => saveGroupSubcatEdit(category, subcatName, uid));
+    row.querySelector('[data-group-subcat-cancel]').addEventListener('click', () => render());
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveGroupSubcatEdit(category, subcatName, uid);
       if (e.key === 'Escape') render();
     });
   }
 
-  async function saveSubcatEdit(itemId) {
-    const input = document.getElementById(`subcatInput_${itemId}`);
-    const unitInput = document.getElementById(`unitLabelInput_${itemId}`);
-    const bulkApply = document.getElementById(`subcatBulkApply_${itemId}`).checked;
-    const newSubcat = input.value.trim();
+  async function saveGroupSubcatEdit(category, oldSubcatName, uid) {
+    const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
+    const unitInput = document.getElementById(`groupUnitInput_${uid}`);
+    const newSubcat = nameInput.value.trim();
     const newUnitLabel = unitInput.value.trim();
 
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (!item) return;
-    const oldSubcat = item.subcategory || '';
+    const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === oldSubcatName);
+    const ids = groupItems.map(i => i.id);
 
-    if (bulkApply) {
-      const siblingIds = allItems
-        .filter(i => i.category === item.category && (i.subcategory || '') === oldSubcat)
-        .map(i => i.id);
+    const { error } = await supabaseClient
+      .from('inventory_items')
+      .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
+      .in('id', ids);
 
-      const { error } = await supabaseClient
-        .from('inventory_items')
-        .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
-        .in('id', siblingIds);
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
 
-      if (error) { showToast('Could not save: ' + error.message, true); return; }
-
-      siblingIds.forEach(id => {
-        const it = allItems.find(i => String(i.id) === String(id));
-        if (it) { it.subcategory = newSubcat || null; it.unit_label = newUnitLabel || null; }
-      });
-      showToast(`Updated ${siblingIds.length} item${siblingIds.length === 1 ? '' : 's'}.`);
-    } else {
-      const { error } = await supabaseClient
-        .from('inventory_items')
-        .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
-        .eq('id', itemId);
-
-      if (error) { showToast('Could not save: ' + error.message, true); return; }
-
-      item.subcategory = newSubcat || null;
-      item.unit_label = newUnitLabel || null;
-      showToast('Subcategory updated.');
-    }
-
+    ids.forEach(id => {
+      const it = allItems.find(i => String(i.id) === String(id));
+      if (it) { it.subcategory = newSubcat || null; it.unit_label = newUnitLabel || null; }
+    });
+    showToast(`Updated ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
     render();
   }
 
@@ -1260,10 +1240,7 @@
 
     const groupRow = (g) => `
       <div class="schedule-item">
-        <div>
-          <div class="schedule-item-name">${g.subcategory}</div>
-          <div class="schedule-item-cat">${g.category} · ${g.items.length} item${g.items.length === 1 ? '' : 's'}</div>
-        </div>
+        <div class="schedule-item-name">${g.subcategory}</div>
         <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
           <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
           <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
@@ -1283,11 +1260,7 @@
     };
 
     scheduleView.innerHTML = `
-      <p style="font-size:12.5px; color: var(--muted); margin: 0 0 14px;">
-        Scheduling applies to a whole category + subcategory at once — every item inside inherits the
-        same cadence. Suggestions are based on your actual restock history where available, and on
-        typical turnover for the category otherwise. Change any dropdown to override.
-      </p>
+      <p style="font-size:12px; color: var(--muted); margin: 0 0 12px;">Change a dropdown to move a subcategory between buckets.</p>
       <div class="schedule-grid">
         ${colHtml('weekly', 'Weekly')}
         ${colHtml('biweekly', 'Biweekly')}
