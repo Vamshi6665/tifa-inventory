@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tifa Inventory — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --mint: #2AAE72;
+    --mint-dark: #1e8a5a;
+    --forest: #0F3D28;
+    --cream: #FAF9F6;
+    --amber: #C9862B;
+    --error: #C0392B;
+    --border: #E4E4DE;
+    --muted: #6b7a6f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--forest);
+  }
+
+  header {
+    background: var(--forest);
+    color: white;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--mint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .brand-title {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    font-size: 17px;
+  }
+
+  #logoutBtn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #logoutBtn:hover { background: rgba(255,255,255,0.08); }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    margin: 0 0 4px;
+  }
+
+  .page-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 28px;
+  }
+
+  .category-block {
+    margin-bottom: 32px;
+  }
+
+  .category-header {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--mint-dark);
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1.5px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  th, td {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #F5F4EF;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  .status-pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .status-active { background: rgba(42,174,114,0.12); color: var(--mint-dark); }
+  .status-low { background: rgba(192,57,43,0.10); color: var(--error); }
+  .status-seasonal { background: rgba(201,134,43,0.12); color: var(--amber); }
+  .status-hold, .status-trial { background: #EDEDE8; color: var(--muted); }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+  }
+
+  .empty-state h2 {
+    font-family: 'Playfair Display', serif;
+    color: var(--forest);
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+
+  /* Low stock alert modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,61,40,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+
+  .modal {
+    background: var(--cream);
+    border-radius: 14px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+  }
+
+  .modal-header {
+    padding: 24px 28px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 21px;
+    margin: 0 0 4px;
+    color: var(--error);
+  }
+
+  .modal-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .modal-body {
+    padding: 8px 28px;
+    overflow-y: auto;
+  }
+
+  .alert-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-item:last-child { border-bottom: none; }
+
+  .alert-item-name { font-weight: 600; font-size: 14px; }
+  .alert-item-cat { font-size: 12px; color: var(--muted); }
+  .alert-item-value { font-size: 13px; color: var(--error); font-weight: 600; }
+
+  .modal-footer {
+    padding: 18px 28px 24px;
+  }
+
+  .modal-footer button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--forest);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .modal-footer button:hover { background: #0a2b1c; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">T</div>
+    <div class="brand-title">Tifa Inventory</div>
+  </div>
+  <button id="logoutBtn">Sign out</button>
+</header>
+
+<main>
+  <h1 class="page-title">Inventory</h1>
+  <p class="page-subtitle" id="pageSubtitle">Loading…</p>
+  <div id="content"></div>
+</main>
+
+<!-- Low stock alert modal -->
+<div class="modal-overlay" id="alertOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Items need reordering</h2>
+      <p>These are at or below their set threshold.</p>
+    </div>
+    <div class="modal-body" id="alertList"></div>
+    <div class="modal-footer">
+      <button id="dismissAlert">Got it</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ozrnoorbyiyjpngdffdm.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_TRs7-22RYtwvDtuRaDcdwQ_KRxMzw8G";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const content = document.getElementById('content');
+  const pageSubtitle = document.getElementById('pageSubtitle');
+  const alertOverlay = document.getElementById('alertOverlay');
+  const alertList = document.getElementById('alertList');
+
+  // ---- Auth guard ----
+  (async function checkAuth() {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      window.location.href = 'login.html';
+      return;
+    }
+    loadDashboard();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  document.getElementById('dismissAlert').addEventListener('click', () => {
+    alertOverlay.classList.remove('visible');
+  });
+
+  // Parses "current_value" text into a comparable number when possible.
+  // Handles plain numbers, percentages ("40%"), and leading-number patterns
+  // ("1 new + 3" -> takes the first number found). Returns null if not parseable.
+  function parseValue(text) {
+    if (!text) return null;
+    const match = text.match(/-?\d+(\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+  }
+
+  function isLowStock(item) {
+    if (item.par_level === null || item.par_level === undefined) return false;
+    const val = parseValue(item.current_value);
+    if (val === null) return false;
+    return val <= item.par_level;
+  }
+
+  async function loadDashboard() {
+    const { data: items, error } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .neq('status', 'discontinued')
+      .order('category')
+      .order('name');
+
+    if (error) {
+      pageSubtitle.textContent = 'Something went wrong loading inventory.';
+      content.innerHTML = `<div class="empty-state"><h2>Couldn't load items</h2><p>${error.message}</p></div>`;
+      return;
+    }
+
+    if (!items || items.length === 0) {
+      pageSubtitle.textContent = 'No items yet.';
+      content.innerHTML = `
+        <div class="empty-state">
+          <h2>No inventory items yet</h2>
+          <p>Once your item list is imported, it'll show up here.</p>
+        </div>`;
+      return;
+    }
+
+    pageSubtitle.textContent = `${items.length} item${items.length === 1 ? '' : 's'} tracked across all categories.`;
+
+    // Group by category
+    const grouped = {};
+    for (const item of items) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    let html = '';
+    for (const category of Object.keys(grouped)) {
+      html += `<div class="category-block">
+        <div class="category-header">${category}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Current</th>
+              <th>Threshold</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+      for (const item of grouped[category]) {
+        const low = isLowStock(item);
+        const statusLabel = low ? 'Low stock' : item.status;
+        const statusClass = low ? 'status-low' : `status-${item.status}`;
+
+        html += `<tr>
+          <td>${item.name}</td>
+          <td>${item.current_value ?? '—'}</td>
+          <td>${item.par_level ?? '—'}</td>
+          <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+        </tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+    }
+
+    content.innerHTML = html;
+
+    // Build low-stock alert
+    const lowItems = items.filter(isLowStock);
+    if (lowItems.length > 0) {
+      alertList.innerHTML = lowItems.map(item => `
+        <div class="alert-item">
+          <div>
+            <div class="alert-item-name">${item.name}</div>
+            <div class="alert-item-cat">${item.category}</div>
+          </div>
+          <div class="alert-item-value">${item.current_value ?? '—'} / threshold ${item.par_level}</div>
+        </div>
+      `).join('');
+      alertOverlay.classList.add('visible');
+    }
+  }
+</script>
+
+</body>
+</html>
