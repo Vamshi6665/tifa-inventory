@@ -66,7 +66,20 @@
   }
   #logoutBtn:hover { background: rgba(255,255,255,0.08); }
 
-  main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+  .layout {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static !important; order: -1; }
+  }
 
   .page-top {
     display: flex;
@@ -74,11 +87,11 @@
     align-items: flex-end;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
   }
 
-  .page-title { font-family: 'Playfair Display', serif; font-size: 28px; margin: 0 0 4px; }
-  .page-subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+  .page-title { font-family: 'Playfair Display', serif; font-size: 27px; margin: 0 0 4px; }
+  .page-subtitle { color: var(--muted); font-size: 13.5px; margin: 0; }
 
   .toggle-all-btn {
     background: white;
@@ -93,136 +106,93 @@
   }
   .toggle-all-btn:hover { background: #F0EFE9; }
 
-  /* Collapsible category */
+  .search-row { margin-bottom: 18px; position: relative; }
+  .search-row input {
+    width: 100%;
+    padding: 11px 14px 11px 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: white;
+  }
+  .search-row input:focus { outline: none; border-color: var(--mint); }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; color: var(--muted); pointer-events: none;
+  }
+
   .category-block {
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     background: white;
     border-radius: 10px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     overflow: hidden;
   }
+  .category-block.hidden-by-search { display: none; }
 
   .category-toggle {
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
+    padding: 15px 18px;
     background: white;
     border: none;
     cursor: pointer;
     text-align: left;
     font-family: 'DM Sans', sans-serif;
   }
-
   .category-toggle:hover { background: #FAFAF7; }
 
-  .category-toggle-left { display: flex; align-items: center; gap: 12px; }
-
-  .category-name {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--forest);
-  }
-
-  .category-count {
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 500;
-  }
-
+  .category-toggle-left { display: flex; align-items: center; gap: 11px; }
+  .category-name { font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; color: var(--forest); }
+  .category-count { font-size: 11.5px; color: var(--muted); font-weight: 500; }
   .category-low-badge {
-    font-size: 11px;
-    font-weight: 700;
-    background: rgba(192,57,43,0.1);
-    color: var(--error);
-    padding: 3px 9px;
-    border-radius: 20px;
+    font-size: 11px; font-weight: 700; background: rgba(192,57,43,0.1);
+    color: var(--error); padding: 3px 9px; border-radius: 20px;
   }
 
-  .chevron {
-    width: 18px;
-    height: 18px;
-    transition: transform 0.15s ease;
-    flex-shrink: 0;
-    color: var(--muted);
-  }
+  .chevron { width: 17px; height: 17px; transition: transform 0.15s ease; flex-shrink: 0; color: var(--muted); }
   .category-block.expanded .chevron { transform: rotate(90deg); }
 
-  .category-table-wrap {
-    display: none;
-    border-top: 1px solid var(--border);
-  }
+  .category-table-wrap { display: none; border-top: 1px solid var(--border); }
   .category-block.expanded .category-table-wrap { display: block; }
 
   table { width: 100%; border-collapse: collapse; }
-
-  th, td {
-    text-align: left;
-    padding: 11px 20px;
-    font-size: 13.5px;
-    border-bottom: 1px solid var(--border);
-  }
-
+  th, td { text-align: left; padding: 10px 18px; font-size: 13px; border-bottom: 1px solid var(--border); }
   th {
-    font-weight: 600;
-    color: var(--muted);
-    font-size: 11.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: #F5F4EF;
+    font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; background: #F5F4EF;
   }
-
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #FAFAF7; }
+  tr.row-hidden-by-search { display: none; }
 
   .status-pill {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    display: inline-block; font-size: 10.5px; font-weight: 600; padding: 3px 8px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.03em;
   }
   .status-active { background: rgba(42,174,114,0.12); color: var(--mint-dark); }
   .status-low { background: rgba(192,57,43,0.10); color: var(--error); }
+  .status-zero { background: var(--error); color: white; }
   .status-seasonal { background: rgba(201,134,43,0.12); color: var(--amber); }
   .status-hold, .status-trial { background: #EDEDE8; color: var(--muted); }
 
-  .current-cell { display: flex; align-items: center; gap: 8px; }
-
+  .current-cell { display: flex; align-items: center; gap: 7px; }
   .edit-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    color: var(--muted);
-    border-radius: 5px;
-    display: inline-flex;
-    align-items: center;
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--muted); border-radius: 5px; display: inline-flex; align-items: center;
   }
   .edit-btn:hover { background: #EDEDE8; color: var(--forest); }
-  .edit-btn svg { width: 14px; height: 14px; }
+  .edit-btn svg { width: 13px; height: 13px; }
 
-  .edit-input-row { display: flex; align-items: center; gap: 6px; }
+  .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .edit-input-row input {
-    width: 110px;
-    padding: 6px 8px;
-    border: 1.5px solid var(--mint);
-    border-radius: 6px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13.5px;
+    width: 100px; padding: 6px 8px; border: 1.5px solid var(--mint); border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
   }
-  .edit-save, .edit-cancel {
-    border: none;
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
+  .edit-save, .edit-cancel { border: none; border-radius: 6px; padding: 6px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
   .edit-save { background: var(--mint); color: white; }
   .edit-save:hover { background: var(--mint-dark); }
   .edit-cancel { background: #EDEDE8; color: var(--muted); }
@@ -231,71 +201,63 @@
   .empty-state { text-align: center; padding: 80px 20px; color: var(--muted); }
   .empty-state h2 { font-family: 'Playfair Display', serif; color: var(--forest); font-size: 22px; margin-bottom: 8px; }
 
-  /* Low stock alert modal */
+  .sidebar {
+    position: sticky; top: 20px; background: white; border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;
+    max-height: calc(100vh - 40px); display: flex; flex-direction: column;
+  }
+  .sidebar-header { background: var(--forest); color: white; padding: 16px 18px; }
+  .sidebar-header h2 { font-family: 'Playfair Display', serif; font-size: 16.5px; margin: 0 0 3px; }
+  .sidebar-header p { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .sidebar-body { overflow-y: auto; flex: 1; padding: 6px 0; }
+  .sidebar-empty { padding: 36px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+  .sidebar-empty svg { width: 32px; height: 32px; margin-bottom: 10px; color: var(--mint); }
+  .sidebar-group-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); padding: 12px 18px 4px;
+  }
+  .sidebar-item { padding: 10px 18px; border-bottom: 1px solid #F0EFE9; }
+  .sidebar-item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .sidebar-item-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .sidebar-item-value { font-size: 11.5px; font-weight: 700; color: var(--error); white-space: nowrap; }
+  .sidebar-item-value.zero-value { background: var(--error); color: white; padding: 2px 7px; border-radius: 10px; }
+  .sidebar-edit-btn {
+    background: none; border: 1px solid var(--border); cursor: pointer;
+    padding: 3px 9px; color: var(--muted); border-radius: 6px; font-size: 11px;
+    margin-top: 6px; font-family: 'DM Sans', sans-serif; font-weight: 600;
+  }
+  .sidebar-edit-btn:hover { background: #F5F4EF; color: var(--forest); }
+
   .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(15,61,40,0.55);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    padding: 20px;
+    position: fixed; inset: 0; background: rgba(15,61,40,0.55);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
   }
   .modal-overlay.visible { display: flex; }
-
   .modal {
-    background: var(--cream);
-    border-radius: 14px;
-    max-width: 480px;
-    width: 100%;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+    background: var(--cream); border-radius: 14px; max-width: 460px; width: 100%;
+    max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.3);
   }
-
-  .modal-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--border); }
-  .modal-header h2 { font-family: 'Playfair Display', serif; font-size: 21px; margin: 0 0 4px; color: var(--error); }
+  .modal-header { padding: 22px 26px 14px; border-bottom: 1px solid var(--border); }
+  .modal-header h2 { font-family: 'Playfair Display', serif; font-size: 20px; margin: 0 0 4px; color: var(--error); }
   .modal-header p { margin: 0; font-size: 13px; color: var(--muted); }
-
-  .modal-body { padding: 8px 28px; overflow-y: auto; }
-
-  .alert-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .modal-body { padding: 6px 26px; overflow-y: auto; }
+  .alert-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
   .alert-item:last-child { border-bottom: none; }
-  .alert-item-name { font-weight: 600; font-size: 14px; }
-  .alert-item-cat { font-size: 12px; color: var(--muted); }
-  .alert-item-value { font-size: 13px; color: var(--error); font-weight: 600; }
-
-  .modal-footer { padding: 18px 28px 24px; }
+  .alert-item-name { font-weight: 600; font-size: 13.5px; }
+  .alert-item-cat { font-size: 11.5px; color: var(--muted); }
+  .alert-item-value { font-size: 12.5px; color: var(--error); font-weight: 600; white-space: nowrap; }
+  .modal-footer { padding: 16px 26px 22px; }
   .modal-footer button {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    background: var(--forest);
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
+    width: 100%; padding: 12px; border: none; border-radius: 8px;
+    background: var(--forest); color: white; font-weight: 600; font-size: 14px; cursor: pointer;
   }
   .modal-footer button:hover { background: #0a2b1c; }
 
   .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(0);
-    background: var(--forest);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 13.5px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-    z-index: 200;
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--forest); color: white; padding: 12px 20px; border-radius: 8px;
+    font-size: 13.5px; box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 200;
   }
   .toast.visible { opacity: 1; }
   .toast.error-toast { background: var(--error); }
@@ -311,23 +273,40 @@
   <button id="logoutBtn">Sign out</button>
 </header>
 
-<main>
-  <div class="page-top">
-    <div>
-      <h1 class="page-title">Inventory</h1>
-      <p class="page-subtitle" id="pageSubtitle">Loading…</p>
+<div class="layout">
+  <div class="main-col">
+    <div class="page-top">
+      <div>
+        <h1 class="page-title">Inventory</h1>
+        <p class="page-subtitle" id="pageSubtitle">Loading…</p>
+      </div>
+      <button class="toggle-all-btn" id="toggleAllBtn">Expand all</button>
     </div>
-    <button class="toggle-all-btn" id="toggleAllBtn">Expand all</button>
-  </div>
-  <div id="content"></div>
-</main>
 
-<!-- Low stock alert modal -->
+    <div class="search-row">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search items by name…" />
+    </div>
+
+    <div id="content"></div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Reorder List</h2>
+      <p id="sidebarSubtitle">Loading…</p>
+    </div>
+    <div class="sidebar-body" id="sidebarBody"></div>
+  </aside>
+</div>
+
 <div class="modal-overlay" id="alertOverlay">
   <div class="modal">
     <div class="modal-header">
       <h2>Items need reordering</h2>
-      <p>These are at or below their set threshold.</p>
+      <p>Full list is also pinned on the right side of your dashboard.</p>
     </div>
     <div class="modal-body" id="alertList"></div>
     <div class="modal-footer">
@@ -349,11 +328,14 @@
   const alertList = document.getElementById('alertList');
   const toggleAllBtn = document.getElementById('toggleAllBtn');
   const toastEl = document.getElementById('toast');
+  const searchInput = document.getElementById('searchInput');
+  const sidebarBody = document.getElementById('sidebarBody');
+  const sidebarSubtitle = document.getElementById('sidebarSubtitle');
 
   let allItems = [];
-  let expandedState = {}; // category -> bool
+  let expandedState = {};
+  let searchTerm = '';
 
-  // ---- Auth guard ----
   (async function checkAuth() {
     const { data } = await supabaseClient.auth.getSession();
     if (!data.session) {
@@ -384,11 +366,17 @@
     return match ? parseFloat(match[0]) : null;
   }
 
-  function isLowStock(item) {
-    if (item.par_level === null || item.par_level === undefined) return false;
+  function needsReorder(item) {
     const val = parseValue(item.current_value);
     if (val === null) return false;
-    return val <= item.par_level;
+    if (val <= 0) return true;
+    if (item.par_level !== null && item.par_level !== undefined && val <= item.par_level) return true;
+    return false;
+  }
+
+  function isZero(item) {
+    const val = parseValue(item.current_value);
+    return val !== null && val <= 0;
   }
 
   async function loadDashboard() {
@@ -412,14 +400,20 @@
           <h2>No inventory items yet</h2>
           <p>Once your item list is imported, it'll show up here.</p>
         </div>`;
+      sidebarSubtitle.textContent = 'Nothing to reorder yet.';
       return;
     }
 
     allItems = items;
-    pageSubtitle.textContent = `${items.length} item${items.length === 1 ? '' : 's'} across ${new Set(items.map(i => i.category)).size} categories. Click a category to expand it.`;
+    pageSubtitle.textContent = `${items.length} item${items.length === 1 ? '' : 's'} across ${new Set(items.map(i => i.category)).size} categories.`;
 
     render();
+    renderSidebar();
     maybeShowAlert();
+  }
+
+  function escapeAttr(str) {
+    return String(str).replace(/"/g, '&quot;');
   }
 
   function render() {
@@ -432,9 +426,8 @@
     let html = '';
     for (const category of Object.keys(grouped)) {
       const catItems = grouped[category];
-      const lowCount = catItems.filter(isLowStock).length;
-      const isExpanded = !!expandedState[category];
-      const catId = category.replace(/[^a-zA-Z0-9]/g, '_');
+      const lowCount = catItems.filter(needsReorder).length;
+      const isExpanded = !!expandedState[category] || searchTerm.length > 0;
 
       html += `<div class="category-block ${isExpanded ? 'expanded' : ''}" data-category="${escapeAttr(category)}">
         <button class="category-toggle" data-toggle-category="${escapeAttr(category)}">
@@ -445,34 +438,30 @@
             <span class="category-name">${category}</span>
             <span class="category-count">${catItems.length} item${catItems.length === 1 ? '' : 's'}</span>
           </div>
-          ${lowCount > 0 ? `<span class="category-low-badge">${lowCount} low</span>` : ''}
+          ${lowCount > 0 ? `<span class="category-low-badge">${lowCount} to reorder</span>` : ''}
         </button>
         <div class="category-table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Item</th>
-                <th>Current</th>
-                <th>Threshold</th>
-                <th>Status</th>
-              </tr>
+              <tr><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th></tr>
             </thead>
             <tbody>`;
 
       for (const item of catItems) {
-        const low = isLowStock(item);
-        const statusLabel = low ? 'Low stock' : item.status;
-        const statusClass = low ? 'status-low' : `status-${item.status}`;
+        const reorder = needsReorder(item);
+        const zero = isZero(item);
+        const statusLabel = zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status);
+        const statusClass = zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`);
+        const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
 
-        html += `<tr data-item-id="${item.id}">
+        html += `<tr data-item-id="${item.id}" class="${matchesSearch ? '' : 'row-hidden-by-search'}">
           <td>${item.name}</td>
           <td>
             <div class="current-cell" data-current-cell="${item.id}">
               <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
               <button class="edit-btn" data-edit-btn="${item.id}" title="Update quantity">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 20h9"/>
-                  <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
                 </svg>
               </button>
             </div>
@@ -486,12 +475,57 @@
     }
 
     content.innerHTML = html;
+
+    if (searchTerm) {
+      document.querySelectorAll('.category-block').forEach(block => {
+        const visibleRows = block.querySelectorAll('tbody tr:not(.row-hidden-by-search)');
+        block.classList.toggle('hidden-by-search', visibleRows.length === 0);
+      });
+    }
+
     attachCategoryToggleHandlers();
-    attachEditHandlers();
+    attachEditHandlers('main');
   }
 
-  function escapeAttr(str) {
-    return String(str).replace(/"/g, '&quot;');
+  function renderSidebar() {
+    const reorderItems = allItems.filter(needsReorder);
+    sidebarSubtitle.textContent = reorderItems.length === 0
+      ? 'Nothing needs reordering right now.'
+      : `${reorderItems.length} item${reorderItems.length === 1 ? '' : 's'} need attention.`;
+
+    if (reorderItems.length === 0) {
+      sidebarBody.innerHTML = `
+        <div class="sidebar-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div>All stocked up.</div>
+        </div>`;
+      return;
+    }
+
+    const grouped = {};
+    for (const item of reorderItems) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    let html = '';
+    for (const category of Object.keys(grouped)) {
+      html += `<div class="sidebar-group-label">${category}</div>`;
+      for (const item of grouped[category]) {
+        const zero = isZero(item);
+        html += `<div class="sidebar-item" data-sidebar-item="${item.id}">
+          <div class="sidebar-item-top">
+            <div class="sidebar-item-name">${item.name}</div>
+            <div class="sidebar-item-value ${zero ? 'zero-value' : ''}">${zero ? 'OUT' : (item.current_value ?? '—')}</div>
+          </div>
+          <button class="sidebar-edit-btn" data-edit-btn="${item.id}">Update</button>
+        </div>`;
+      }
+    }
+    sidebarBody.innerHTML = html;
+    attachEditHandlers('sidebar');
   }
 
   function attachCategoryToggleHandlers() {
@@ -504,43 +538,56 @@
     });
   }
 
-  function attachEditHandlers() {
-    document.querySelectorAll('[data-edit-btn]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const itemId = btn.getAttribute('data-edit-btn');
-        openEditor(itemId);
-      });
+  function attachEditHandlers(context) {
+    const scope = context === 'sidebar' ? sidebarBody : content;
+    scope.querySelectorAll('[data-edit-btn]').forEach(btn => {
+      btn.addEventListener('click', () => openEditor(btn.getAttribute('data-edit-btn'), context));
     });
   }
 
-  function openEditor(itemId) {
+  function openEditor(itemId, context) {
     const item = allItems.find(i => String(i.id) === String(itemId));
     if (!item) return;
-    const cell = document.querySelector(`[data-current-cell="${itemId}"]`);
-    if (!cell) return;
 
-    cell.innerHTML = `
-      <div class="edit-input-row">
-        <input type="text" id="editInput_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
-        <button class="edit-save" data-save="${itemId}">Save</button>
-        <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
-      </div>
-    `;
-
-    const input = document.getElementById(`editInput_${itemId}`);
-    input.focus();
-    input.select();
-
-    cell.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
-    cell.querySelector('[data-cancel]').addEventListener('click', () => render());
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveEdit(itemId);
-      if (e.key === 'Escape') render();
-    });
+    if (context === 'sidebar') {
+      const row = document.querySelector(`[data-sidebar-item="${itemId}"]`);
+      if (!row) return;
+      row.innerHTML = `
+        <div class="edit-input-row">
+          <input type="text" id="editInput_sb_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
+          <button class="edit-save" data-save="${itemId}">Save</button>
+          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
+        </div>`;
+      const input = document.getElementById(`editInput_sb_${itemId}`);
+      input.focus(); input.select();
+      row.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
+      row.querySelector('[data-cancel]').addEventListener('click', () => renderSidebar());
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveEdit(itemId);
+        if (e.key === 'Escape') renderSidebar();
+      });
+    } else {
+      const cell = document.querySelector(`[data-current-cell="${itemId}"]`);
+      if (!cell) return;
+      cell.innerHTML = `
+        <div class="edit-input-row">
+          <input type="text" id="editInput_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
+          <button class="edit-save" data-save="${itemId}">Save</button>
+          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
+        </div>`;
+      const input = document.getElementById(`editInput_${itemId}`);
+      input.focus(); input.select();
+      cell.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
+      cell.querySelector('[data-cancel]').addEventListener('click', () => render());
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveEdit(itemId);
+        if (e.key === 'Escape') render();
+      });
+    }
   }
 
   async function saveEdit(itemId) {
-    const input = document.getElementById(`editInput_${itemId}`);
+    const input = document.getElementById(`editInput_${itemId}`) || document.getElementById(`editInput_sb_${itemId}`);
     const newValue = input.value.trim();
     if (newValue === '') {
       showToast('Enter a value before saving.', true);
@@ -576,10 +623,11 @@
     const item = allItems.find(i => String(i.id) === String(itemId));
     if (item) item.current_value = newValue;
     render();
+    renderSidebar();
   }
 
   function maybeShowAlert() {
-    const lowItems = allItems.filter(isLowStock);
+    const lowItems = allItems.filter(needsReorder);
     if (lowItems.length > 0) {
       alertList.innerHTML = lowItems.map(item => `
         <div class="alert-item">
@@ -587,7 +635,7 @@
             <div class="alert-item-name">${item.name}</div>
             <div class="alert-item-cat">${item.category}</div>
           </div>
-          <div class="alert-item-value">${item.current_value ?? '—'} / threshold ${item.par_level}</div>
+          <div class="alert-item-value">${isZero(item) ? 'OUT' : (item.current_value ?? '—')}${item.par_level != null ? ' / threshold ' + item.par_level : ''}</div>
         </div>
       `).join('');
       alertOverlay.classList.add('visible');
@@ -600,6 +648,11 @@
     const categories = new Set(allItems.map(i => i.category));
     categories.forEach(cat => { expandedState[cat] = allExpanded; });
     toggleAllBtn.textContent = allExpanded ? 'Collapse all' : 'Expand all';
+    render();
+  });
+
+  searchInput.addEventListener('input', (e) => {
+    searchTerm = e.target.value.trim().toLowerCase();
     render();
   });
 </script>
