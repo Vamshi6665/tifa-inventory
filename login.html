@@ -1,1 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tifa Inventory — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --mint: #2AAE72;
+    --mint-dark: #1e8a5a;
+    --forest: #0F3D28;
+    --cream: #FAF9F6;
+    --error: #C0392B;
+    --border: #E2E2DC;
+  }
 
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--forest);
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(42,174,114,0.15), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(42,174,114,0.10), transparent 40%);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--forest);
+    padding: 24px;
+  }
+
+  .card {
+    background: var(--cream);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--mint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    color: white;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .brand-text {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  .brand-text span {
+    display: block;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b7a6f;
+    margin-top: 2px;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: #6b7a6f;
+    margin: 0 0 32px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--forest);
+  }
+
+  input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    margin-bottom: 18px;
+    background: white;
+    color: var(--forest);
+    transition: border-color 0.15s ease;
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--mint);
+  }
+
+  button {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 8px;
+    background: var(--mint);
+    color: white;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    margin-top: 4px;
+  }
+
+  button:hover { background: var(--mint-dark); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .message {
+    font-size: 13px;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: none;
+  }
+
+  .message.error {
+    display: block;
+    background: rgba(192,57,43,0.08);
+    color: var(--error);
+    border: 1px solid rgba(192,57,43,0.2);
+  }
+
+  .footer-note {
+    text-align: center;
+    font-size: 12px;
+    color: #93a396;
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="brand">
+    <div class="brand-mark">T</div>
+    <div class="brand-text">
+      Tifa Inventory
+      <span>Owner Access Only</span>
+    </div>
+  </div>
+
+  <h1>Welcome back</h1>
+  <p class="subtitle">Sign in to view and manage stock levels.</p>
+
+  <form id="loginForm">
+    <label for="email">Email</label>
+    <input type="email" id="email" required autocomplete="username" />
+
+    <label for="password">Password</label>
+    <input type="password" id="password" required autocomplete="current-password" />
+
+    <button type="submit" id="submitBtn">Sign in</button>
+
+    <div class="message" id="errorMsg"></div>
+  </form>
+
+  <p class="footer-note">Internal tool for Tifa Chocolate &amp; Gelato</p>
+</div>
+
+<script>
+  // Public project values — safe to expose client-side.
+  // Row Level Security on the database is what actually protects the data.
+  const SUPABASE_URL = "https://ozrnoorbyiyjpngdffdm.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_TRs7-22RYtwvDtuRaDcdwQ_KRxMzw8G";
+
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const form = document.getElementById('loginForm');
+  const errorMsg = document.getElementById('errorMsg');
+  const submitBtn = document.getElementById('submitBtn');
+
+  // If already logged in, skip straight to dashboard
+  supabaseClient.auth.getSession().then(({ data }) => {
+    if (data.session) {
+      window.location.href = 'dashboard.html';
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.style.display = 'none';
+    errorMsg.classList.remove('error');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Signing in…';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      errorMsg.textContent = 'Incorrect email or password. Try again.';
+      errorMsg.classList.add('error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign in';
+      return;
+    }
+
+    window.location.href = 'dashboard.html';
+  });
+</script>
+
+</body>
+</html>
