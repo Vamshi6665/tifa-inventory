@@ -79,8 +79,8 @@
     font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
   }
   .btn:hover { background: #F5F2E8; }
-  .btn-primary { background: var(--pistachio); color: white; border-color: var(--pistachio); }
-  .btn-primary:hover { background: var(--pistachio-dark); }
+  .btn-primary { background: var(--pistachio-dark); color: white; border-color: var(--pistachio-dark); box-shadow: 0 1px 3px rgba(63,82,34,0.25); }
+  .btn-primary:hover { background: var(--pistachio-deep); }
 
   .tab-row { display: flex; gap: 8px; margin-bottom: 18px; }
   .tab-btn {
@@ -204,6 +204,22 @@
   tr.row-hidden-by-search { display: none; }
   tr.retired-row { opacity: 0.55; }
 
+  tr.subcategory-header-row td {
+    background: var(--pistachio-tint); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--pistachio-dark);
+    padding: 7px 16px;
+  }
+  tr.subcategory-header-row:hover td { background: var(--pistachio-tint); }
+
+  .subcat-line { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+  .subcat-text { font-size: 11px; color: var(--muted); }
+  .subcat-line .icon-btn { padding: 2px 5px; font-size: 10.5px; }
+  .subcat-edit-input-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
+  .subcat-edit-input-row input {
+    width: 140px; padding: 4px 7px; border: 1.5px solid var(--pistachio); border-radius: 5px;
+    font-family: 'DM Sans', sans-serif; font-size: 11.5px;
+  }
+
   .status-pill {
     display: inline-block; font-size: 10.5px; font-weight: 600; padding: 3px 8px;
     border-radius: 20px; text-transform: uppercase; letter-spacing: 0.03em;
@@ -225,11 +241,12 @@
 
   .row-actions { display: flex; align-items: center; gap: 4px; }
   .icon-btn {
-    background: none; border: none; cursor: pointer; padding: 4px;
-    color: var(--muted); border-radius: 5px; display: inline-flex; align-items: center; font-size: 13px;
+    background: var(--pistachio-tint); border: none; cursor: pointer; padding: 5px 7px;
+    color: var(--pistachio-dark); border-radius: 6px; display: inline-flex; align-items: center; font-size: 13px;
   }
-  .icon-btn:hover { background: #EEEDE4; color: var(--pistachio-deep); }
-  .icon-btn.danger:hover { background: #F2E9E9; color: var(--error-deep); }
+  .icon-btn:hover { background: var(--pistachio); color: white; }
+  .icon-btn.danger { background: #F2E9E9; color: var(--error-deep); }
+  .icon-btn.danger:hover { background: var(--error-deep); color: white; }
 
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
@@ -671,6 +688,19 @@
     return true;
   }
 
+  function groupBySubcategory(items) {
+    const order = [];
+    const map = {};
+    for (const item of items) {
+      const key = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : '__NONE__';
+      if (!map[key]) { map[key] = []; order.push(key); }
+      map[key].push(item);
+    }
+    // Push "no subcategory" bucket to the end
+    order.sort((a, b) => (a === '__NONE__') - (b === '__NONE__'));
+    return order.map(key => [key === '__NONE__' ? 'Uncategorized' : key, map[key]]);
+  }
+
   function render() {
     const visibleItems = showRetired ? allItems : activeItems();
     const grouped = {};
@@ -704,35 +734,46 @@
             <thead><tr><th style="width:30px;"><input type="checkbox" data-select-all-in-category="${escapeAttr(category)}"></th><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th><th></th></tr></thead>
             <tbody>`;
 
-      for (const item of catItems) {
-        const reorder = needsReorder(item);
-        const zero = isZero(item);
-        const retired = item.status === 'discontinued';
-        const statusLabel = retired ? 'Retired' : (zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status));
-        const statusClass = retired ? 'status-discontinued' : (zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`));
-        const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
-        const matchesFilter = itemMatchesFilter(item);
-        const rowVisible = matchesSearch && matchesFilter;
-        const checked = selectedIds.has(String(item.id));
+      const subgroups = groupBySubcategory(catItems);
+      for (const [subcatName, subItems] of subgroups) {
+        html += `<tr class="subcategory-header-row"><td colspan="6">${subcatName}</td></tr>`;
 
-        html += `<tr data-item-id="${item.id}" class="${rowVisible ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
-          <td><input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}></td>
-          <td>${item.name}</td>
-          <td>
-            <div class="current-cell" data-current-cell="${item.id}">
-              <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
-              <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
-            </div>
-          </td>
-          <td>${item.par_level ?? '—'}</td>
-          <td>
-            <span class="status-pill ${statusClass}">${statusLabel}</span>
-            <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
-          </td>
-          <td class="row-actions">
-            <button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>
-          </td>
-        </tr>`;
+        for (const item of subItems) {
+          const reorder = needsReorder(item);
+          const zero = isZero(item);
+          const retired = item.status === 'discontinued';
+          const statusLabel = retired ? 'Retired' : (zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status));
+          const statusClass = retired ? 'status-discontinued' : (zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`));
+          const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
+          const matchesFilter = itemMatchesFilter(item);
+          const rowVisible = matchesSearch && matchesFilter;
+          const checked = selectedIds.has(String(item.id));
+
+          html += `<tr data-item-id="${item.id}" class="${rowVisible ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
+            <td><input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}></td>
+            <td>
+              <div>${item.name}</div>
+              <div class="subcat-line" data-subcat-cell="${item.id}">
+                <span class="subcat-text">${item.subcategory ? escapeAttr(item.subcategory) : 'No subcategory'}</span>
+                <button class="icon-btn" data-edit-subcat="${item.id}" title="Change subcategory"><i class="ti ti-tag"></i></button>
+              </div>
+            </td>
+            <td>
+              <div class="current-cell" data-current-cell="${item.id}">
+                <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
+                <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
+              </div>
+            </td>
+            <td>${item.par_level ?? '—'}</td>
+            <td>
+              <span class="status-pill ${statusClass}">${statusLabel}</span>
+              <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
+            </td>
+            <td class="row-actions">
+              <button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>
+            </td>
+          </tr>`;
+        }
       }
 
       html += `</tbody></table></div></div>`;
@@ -752,6 +793,63 @@
     attachDeleteHandlers();
     attachRetireHandlers();
     attachSelectHandlers();
+    attachSubcatHandlers();
+  }
+
+  function attachSubcatHandlers() {
+    document.querySelectorAll('[data-edit-subcat]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSubcatEditor(btn.getAttribute('data-edit-subcat'));
+      });
+    });
+  }
+
+  function openSubcatEditor(itemId) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cell = document.querySelector(`[data-subcat-cell="${itemId}"]`);
+    if (!cell) return;
+
+    const existingSubcats = [...new Set(
+      allItems.filter(i => i.category === item.category && i.subcategory).map(i => i.subcategory)
+    )].sort();
+
+    cell.innerHTML = `
+      <div class="subcat-edit-input-row">
+        <input type="text" id="subcatInput_${itemId}" list="subcatList_${itemId}" value="${item.subcategory ? escapeAttr(item.subcategory) : ''}" placeholder="e.g. Muffins" />
+        <datalist id="subcatList_${itemId}">
+          ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
+        </datalist>
+        <button class="edit-save" data-subcat-save="${itemId}">Save</button>
+        <button class="edit-cancel" data-subcat-cancel="${itemId}">Cancel</button>
+      </div>`;
+
+    const input = document.getElementById(`subcatInput_${itemId}`);
+    input.focus(); input.select();
+    cell.querySelector('[data-subcat-save]').addEventListener('click', () => saveSubcatEdit(itemId));
+    cell.querySelector('[data-subcat-cancel]').addEventListener('click', () => render());
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveSubcatEdit(itemId);
+      if (e.key === 'Escape') render();
+    });
+  }
+
+  async function saveSubcatEdit(itemId) {
+    const input = document.getElementById(`subcatInput_${itemId}`);
+    const newSubcat = input.value.trim();
+
+    const { error } = await supabaseClient
+      .from('inventory_items')
+      .update({ subcategory: newSubcat || null })
+      .eq('id', itemId);
+
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) item.subcategory = newSubcat || null;
+    showToast('Subcategory updated.');
+    render();
   }
 
   function renderFilterBanner() {
