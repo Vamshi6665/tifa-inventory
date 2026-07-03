@@ -791,6 +791,7 @@
             <td>
               <div class="current-cell" data-current-cell="${item.id}">
                 <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
+                <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
               </div>
             </td>
             <td>${item.par_level ?? '—'}</td>
@@ -799,7 +800,6 @@
               <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
             </td>
             <td class="row-actions">
-              <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
               <button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>
             </td>
           </tr>`;
