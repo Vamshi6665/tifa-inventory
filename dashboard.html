@@ -14,11 +14,12 @@
     --pistachio-dark: #6E8C3E;
     --pistachio-deep: #3F5222;
     --pistachio-tint: #EEF3E1;
-    --cream: #FBF9F3;
+    --page-bg: #FFFFFF;
+    --panel-bg: #FBFCF9;
     --amber: #C9862B;
     --error: #A34848;
     --error-deep: #791F1F;
-    --border: #E7E2D3;
+    --border: #E9E7DC;
     --muted: #8A8973;
   }
 
@@ -26,7 +27,7 @@
 
   body {
     margin: 0;
-    background: var(--cream);
+    background: var(--page-bg);
     font-family: 'DM Sans', sans-serif;
     color: var(--pistachio-deep);
   }
@@ -94,10 +95,15 @@
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;
   }
   @media (max-width: 700px) { .stats-strip { grid-template-columns: repeat(2, 1fr); } }
-  .stat-card { border-radius: 12px; padding: 14px 16px; }
+  .stat-card {
+    border-radius: 12px; padding: 14px 16px; text-align: left; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .stat-card:not([disabled]):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(63,82,34,0.1); }
   .stat-card.neutral { background: white; border: 1px solid var(--border); }
-  .stat-card.warn { background: #F2E9E9; }
-  .stat-card.critical { background: var(--error-deep); }
+  .stat-card.warn { background: #F2E9E9; border: 1px solid transparent; }
+  .stat-card.critical { background: var(--error-deep); border: 1px solid transparent; }
+  .stat-card.stat-active { outline: 2.5px solid var(--pistachio); outline-offset: 2px; }
   .stat-label { font-size: 11.5px; margin-bottom: 4px; }
   .stat-card.neutral .stat-label { color: var(--muted); }
   .stat-card.warn .stat-label { color: var(--error); }
@@ -106,6 +112,33 @@
   .stat-card.neutral .stat-value { color: var(--pistachio-deep); }
   .stat-card.warn .stat-value { color: var(--error-deep); }
   .stat-card.critical .stat-value { color: white; }
+
+  .filter-banner {
+    display: none; align-items: center; justify-content: space-between;
+    background: var(--pistachio-tint); border-radius: 9px; padding: 9px 14px;
+    margin-bottom: 14px; font-size: 13px; color: var(--pistachio-deep);
+  }
+  .filter-banner.visible { display: flex; }
+  .filter-banner button {
+    background: none; border: none; color: var(--pistachio-deep); font-weight: 700;
+    cursor: pointer; font-size: 13px; text-decoration: underline;
+  }
+
+  .bulk-bar {
+    display: none; align-items: center; justify-content: space-between;
+    background: var(--pistachio-deep); color: white; border-radius: 9px;
+    padding: 10px 16px; margin-bottom: 14px; font-size: 13.5px;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar .bulk-actions { display: flex; gap: 8px; }
+  .bulk-bar button {
+    border: none; border-radius: 6px; padding: 7px 12px; font-size: 12.5px;
+    font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+  .bulk-bar .bulk-delete { background: var(--error-deep); color: white; }
+  .bulk-bar .bulk-delete:hover { background: #5E1717; }
+  .bulk-bar .bulk-clear { background: rgba(255,255,255,0.15); color: white; }
+  .bulk-bar .bulk-clear:hover { background: rgba(255,255,255,0.25); }
 
   .search-row { margin-bottom: 18px; position: relative; display: flex; gap: 10px; align-items: center; }
   .search-row input[type=text] {
@@ -128,8 +161,12 @@
 
   .category-card {
     background: white; border-radius: 12px; border: 1px solid var(--border);
-    overflow: hidden; grid-column: span 1;
+    overflow: hidden; grid-column: span 1; box-shadow: 0 1px 2px rgba(63,82,34,0.05);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    border-left: 3px solid var(--pistachio);
   }
+  .category-card:hover { box-shadow: 0 4px 14px rgba(63,82,34,0.09); transform: translateY(-1px); }
+  .category-card.has-low { border-left-color: #D85A30; }
   .category-card.expanded { grid-column: 1 / -1; }
   .category-card.hidden-by-search { display: none; }
 
@@ -292,7 +329,7 @@
   }
   .modal-overlay.visible { display: flex; }
   .modal {
-    background: var(--cream); border-radius: 14px; max-width: 460px; width: 100%;
+    background: var(--panel-bg); border-radius: 14px; max-width: 460px; width: 100%;
     max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.25);
   }
   .modal-header { padding: 22px 26px 14px; border-bottom: 1px solid var(--border); }
@@ -362,6 +399,19 @@
     </div>
 
     <div class="stats-strip" id="statsStrip"></div>
+
+    <div class="filter-banner" id="filterBanner">
+      <span id="filterBannerText"></span>
+      <button id="clearFilterBtn">Clear filter</button>
+    </div>
+
+    <div class="bulk-bar" id="bulkBar">
+      <span id="bulkBarText">0 selected</span>
+      <div class="bulk-actions">
+        <button class="bulk-delete" id="bulkDeleteBtn">Delete selected</button>
+        <button class="bulk-clear" id="bulkClearBtn">Clear selection</button>
+      </div>
+    </div>
 
     <div id="browseView">
       <div class="search-row">
@@ -481,6 +531,8 @@
   let showRetired = false;
   let currentTab = 'browse';
   let pendingDeleteId = null;
+  let activeFilter = null; // null | 'reorder' | 'outofstock'
+  let selectedIds = new Set();
 
   const CATEGORY_ICONS = {
     'Gelato': 'ti-ice-cream',
@@ -582,16 +634,42 @@
     const outOfStock = items.filter(isZero).length;
 
     statsStrip.innerHTML = `
-      <div class="stat-card neutral"><div class="stat-label">Total items</div><div class="stat-value">${items.length}</div></div>
-      <div class="stat-card neutral"><div class="stat-label">Categories</div><div class="stat-value">${catCount}</div></div>
-      <div class="stat-card warn"><div class="stat-label">To reorder</div><div class="stat-value">${toReorder}</div></div>
-      <div class="stat-card critical"><div class="stat-label">Out of stock</div><div class="stat-value">${outOfStock}</div></div>
+      <button class="stat-card neutral ${activeFilter === null ? 'stat-active' : ''}" data-stat-filter="">
+        <div class="stat-label">Total items</div><div class="stat-value">${items.length}</div>
+      </button>
+      <button class="stat-card neutral" data-stat-filter="" disabled style="cursor:default;">
+        <div class="stat-label">Categories</div><div class="stat-value">${catCount}</div>
+      </button>
+      <button class="stat-card warn ${activeFilter === 'reorder' ? 'stat-active' : ''}" data-stat-filter="reorder">
+        <div class="stat-label">To reorder</div><div class="stat-value">${toReorder}</div>
+      </button>
+      <button class="stat-card critical ${activeFilter === 'outofstock' ? 'stat-active' : ''}" data-stat-filter="outofstock">
+        <div class="stat-label">Out of stock</div><div class="stat-value">${outOfStock}</div>
+      </button>
     `;
+
+    statsStrip.querySelectorAll('[data-stat-filter]:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.getAttribute('data-stat-filter');
+        activeFilter = val === '' ? null : (activeFilter === val ? null : val);
+        if (currentTab !== 'browse') {
+          tabBrowseBtn.click();
+        }
+        renderStats();
+        render();
+      });
+    });
   }
 
   function escapeAttr(str) { return String(str).replace(/"/g, '&quot;'); }
 
   // ---------------- Browse tab ----------------
+
+  function itemMatchesFilter(item) {
+    if (activeFilter === 'reorder') return needsReorder(item);
+    if (activeFilter === 'outofstock') return isZero(item);
+    return true;
+  }
 
   function render() {
     const visibleItems = showRetired ? allItems : activeItems();
@@ -607,9 +685,9 @@
       const lowCount = catItems.filter(needsReorder).length;
       const okCount = catItems.length - lowCount;
       const okPct = catItems.length ? Math.round((okCount / catItems.length) * 100) : 100;
-      const isExpanded = !!expandedState[category] || searchTerm.length > 0;
+      const isExpanded = !!expandedState[category] || searchTerm.length > 0 || activeFilter !== null;
 
-      html += `<div class="category-card ${isExpanded ? 'expanded' : ''}" data-category="${escapeAttr(category)}">
+      html += `<div class="category-card ${isExpanded ? 'expanded' : ''} ${lowCount > 0 ? 'has-low' : ''}" data-category="${escapeAttr(category)}">
         <button class="category-toggle" data-toggle-category="${escapeAttr(category)}">
           <div class="category-toggle-top">
             <div class="category-toggle-left">
@@ -623,7 +701,7 @@
         </button>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;"><input type="checkbox" data-select-all-in-category="${escapeAttr(category)}"></th><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th><th></th></tr></thead>
             <tbody>`;
 
       for (const item of catItems) {
@@ -633,8 +711,12 @@
         const statusLabel = retired ? 'Retired' : (zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status));
         const statusClass = retired ? 'status-discontinued' : (zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`));
         const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
+        const matchesFilter = itemMatchesFilter(item);
+        const rowVisible = matchesSearch && matchesFilter;
+        const checked = selectedIds.has(String(item.id));
 
-        html += `<tr data-item-id="${item.id}" class="${matchesSearch ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
+        html += `<tr data-item-id="${item.id}" class="${rowVisible ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
+          <td><input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}></td>
           <td>${item.name}</td>
           <td>
             <div class="current-cell" data-current-cell="${item.id}">
@@ -658,18 +740,82 @@
 
     content.innerHTML = html || `<div class="empty-state"><h2>No items match</h2></div>`;
 
-    if (searchTerm) {
-      document.querySelectorAll('.category-card').forEach(block => {
-        const visibleRows = block.querySelectorAll('tbody tr:not(.row-hidden-by-search)');
-        block.classList.toggle('hidden-by-search', visibleRows.length === 0);
-      });
-    }
+    document.querySelectorAll('.category-card').forEach(block => {
+      const visibleRows = block.querySelectorAll('tbody tr:not(.row-hidden-by-search)');
+      block.classList.toggle('hidden-by-search', visibleRows.length === 0 && (searchTerm || activeFilter !== null));
+    });
 
+    renderFilterBanner();
+    renderBulkBar();
     attachCategoryToggleHandlers();
     attachEditHandlers('main');
     attachDeleteHandlers();
     attachRetireHandlers();
+    attachSelectHandlers();
   }
+
+  function renderFilterBanner() {
+    const banner = document.getElementById('filterBanner');
+    const text = document.getElementById('filterBannerText');
+    if (activeFilter === 'reorder') {
+      text.textContent = 'Showing only items that need reordering.';
+      banner.classList.add('visible');
+    } else if (activeFilter === 'outofstock') {
+      text.textContent = 'Showing only items that are out of stock.';
+      banner.classList.add('visible');
+    } else {
+      banner.classList.remove('visible');
+    }
+  }
+
+  document.getElementById('clearFilterBtn').addEventListener('click', () => {
+    activeFilter = null;
+    renderStats();
+    render();
+  });
+
+  function attachSelectHandlers() {
+    document.querySelectorAll('[data-select-item]').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-select-item');
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderBulkBar();
+      });
+    });
+    document.querySelectorAll('[data-select-all-in-category]').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        const cat = cb.getAttribute('data-select-all-in-category');
+        const catItems = allItems.filter(i => i.category === cat);
+        catItems.forEach(i => { if (cb.checked) selectedIds.add(String(i.id)); else selectedIds.delete(String(i.id)); });
+        render();
+      });
+    });
+  }
+
+  function renderBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    const text = document.getElementById('bulkBarText');
+    if (selectedIds.size > 0) {
+      text.textContent = `${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'} selected`;
+      bar.classList.add('visible');
+    } else {
+      bar.classList.remove('visible');
+    }
+  }
+
+  document.getElementById('bulkClearBtn').addEventListener('click', () => {
+    selectedIds.clear();
+    render();
+  });
+
+  document.getElementById('bulkDeleteBtn').addEventListener('click', () => {
+    if (selectedIds.size === 0) return;
+    document.getElementById('deleteItemName').textContent = `${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}`;
+    pendingDeleteId = 'BULK';
+    document.getElementById('deleteConfirmOverlay').classList.add('visible');
+  });
 
   function attachCategoryToggleHandlers() {
     document.querySelectorAll('[data-toggle-category]').forEach(btn => {
@@ -719,6 +865,22 @@
 
   document.getElementById('confirmDeleteItem').addEventListener('click', async () => {
     if (!pendingDeleteId) return;
+
+    if (pendingDeleteId === 'BULK') {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabaseClient.from('inventory_items').delete().in('id', ids);
+      if (error) { showToast('Could not delete: ' + error.message, true); return; }
+      allItems = allItems.filter(i => !ids.includes(String(i.id)));
+      allCounts = allCounts.filter(c => !ids.includes(String(c.item_id)));
+      selectedIds.clear();
+      pendingDeleteId = null;
+      document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+      showToast(`${ids.length} items deleted.`);
+      renderStats(); render(); renderSidebar();
+      if (currentTab === 'schedule') renderSchedule();
+      return;
+    }
+
     const { error } = await supabaseClient.from('inventory_items').delete().eq('id', pendingDeleteId);
     if (error) { showToast('Could not delete: ' + error.message, true); return; }
     allItems = allItems.filter(i => String(i.id) !== String(pendingDeleteId));
