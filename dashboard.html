@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --pistachio: #97D66E;
@@ -170,11 +171,15 @@
   .category-card.expanded { grid-column: 1 / -1; }
   .category-card.hidden-by-search { display: none; }
 
+  .category-card-top { display: flex; align-items: flex-start; }
+
   .category-toggle {
-    width: 100%; padding: 15px 16px; background: white; border: none; cursor: pointer;
+    flex: 1; min-width: 0; padding: 15px 16px; background: white; border: none; cursor: pointer;
     text-align: left; font-family: 'DM Sans', sans-serif; display: block;
   }
   .category-toggle:hover { background: #FAFAF5; }
+
+  .category-export-btn { margin: 13px 14px 0 0; flex-shrink: 0; }
 
   .category-toggle-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .category-toggle-left { display: flex; align-items: center; gap: 9px; }
@@ -185,6 +190,8 @@
 
   .category-meta { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
   .category-meta .low-count { color: var(--error-deep); font-weight: 600; }
+
+  .last-updated { font-size: 12px; color: var(--muted); cursor: default; }
 
   .health-bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--pistachio-tint); }
   .health-bar .ok-seg { background: var(--pistachio); }
@@ -427,6 +434,7 @@
       </div>
       <div class="top-actions">
         <button class="btn btn-primary" id="addItemBtn"><i class="ti ti-plus"></i>Add item</button>
+        <button class="btn" id="exportAllBtn"><i class="ti ti-file-spreadsheet"></i>Export all</button>
         <button class="btn" id="toggleAllBtn">Expand all</button>
       </div>
     </div>
@@ -708,6 +716,69 @@
 
   function escapeAttr(str) { return String(str).replace(/"/g, '&quot;'); }
 
+  function formatDateShort(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatDateFull(iso) {
+    if (!iso) return 'No date recorded';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'No date recorded';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function itemsToExportRows(items) {
+    return items.map(item => ({
+      'Item': item.name,
+      'Subcategory': item.subcategory || '',
+      'Unit': item.unit_label || '',
+      'Current Stock': item.current_value || '',
+      'Threshold': item.par_level ?? '',
+      'Status': item.status === 'discontinued' ? 'retired' : item.status,
+      'Supplier': item.supplier || '',
+      'Last Updated': formatDateFull(item.updated_at),
+    }));
+  }
+
+  function safeSheetName(name) {
+    return name.replace(/[\\/*?:\[\]]/g, '-').substring(0, 31);
+  }
+
+  function exportCategoryToExcel(category) {
+    const items = allItems.filter(i => i.category === category && (showRetired || i.status !== 'discontinued'));
+    if (items.length === 0) { showToast('No items to export in this category.', true); return; }
+
+    const ws = XLSX.utils.json_to_sheet(itemsToExportRows(items));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(category));
+    const filename = `${category.replace(/[\\/:*?"<>|]/g, '-')} - Inventory.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast(`Exported ${items.length} item${items.length === 1 ? '' : 's'}.`);
+  }
+
+  function exportAllToExcel() {
+    const categories = [...new Set(allItems.map(i => i.category))];
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set();
+
+    for (const category of categories) {
+      const items = allItems.filter(i => i.category === category && (showRetired || i.status !== 'discontinued'));
+      if (items.length === 0) continue;
+      let sheetName = safeSheetName(category);
+      let suffix = 2;
+      while (usedNames.has(sheetName)) { sheetName = safeSheetName(category).substring(0, 28) + '-' + suffix; suffix++; }
+      usedNames.add(sheetName);
+      const ws = XLSX.utils.json_to_sheet(itemsToExportRows(items));
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+
+    XLSX.writeFile(wb, 'Tifa Inventory - Full Export.xlsx');
+    showToast('Exported all categories.');
+  }
+
   // ---------------- Browse tab ----------------
 
   function itemMatchesFilter(item) {
@@ -746,27 +817,30 @@
       const isExpanded = !!expandedState[category] || searchTerm.length > 0 || activeFilter !== null;
 
       html += `<div class="category-card ${isExpanded ? 'expanded' : ''} ${lowCount > 0 ? 'has-low' : ''}" data-category="${escapeAttr(category)}">
-        <button class="category-toggle" data-toggle-category="${escapeAttr(category)}">
-          <div class="category-toggle-top">
-            <div class="category-toggle-left">
-              <i class="ti ${iconFor(category)} category-icon" aria-hidden="true"></i>
-              <span class="category-name">${category}</span>
+        <div class="category-card-top">
+          <button class="category-toggle" data-toggle-category="${escapeAttr(category)}">
+            <div class="category-toggle-top">
+              <div class="category-toggle-left">
+                <i class="ti ${iconFor(category)} category-icon" aria-hidden="true"></i>
+                <span class="category-name">${category}</span>
+              </div>
+              <i class="ti ti-chevron-right chevron" aria-hidden="true"></i>
             </div>
-            <i class="ti ti-chevron-right chevron" aria-hidden="true"></i>
-          </div>
-          <div class="category-meta">${catItems.length} items${lowCount > 0 ? ` · <span class="low-count">${lowCount} to reorder</span>` : ''}</div>
-          <div class="health-bar"><div class="ok-seg" style="width:${okPct}%"></div><div class="low-seg" style="width:${100 - okPct}%"></div></div>
-        </button>
+            <div class="category-meta">${catItems.length} items${lowCount > 0 ? ` · <span class="low-count">${lowCount} to reorder</span>` : ''}</div>
+            <div class="health-bar"><div class="ok-seg" style="width:${okPct}%"></div><div class="low-seg" style="width:${100 - okPct}%"></div></div>
+          </button>
+          <button class="icon-btn category-export-btn" data-export-category="${escapeAttr(category)}" title="Export this category to Excel"><i class="ti ti-file-spreadsheet"></i></button>
+        </div>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th style="width:30px;"><input type="checkbox" data-select-all-in-category="${escapeAttr(category)}"></th><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;"><input type="checkbox" data-select-all-in-category="${escapeAttr(category)}"></th><th>Item</th><th>Current</th><th>Threshold</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
             <tbody>`;
 
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
         const repUnitLabel = subItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label;
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
-          <td colspan="6">
+          <td colspan="7">
             <div class="subcat-heading-line">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
               <button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>
@@ -799,6 +873,7 @@
               <span class="status-pill ${statusClass}">${statusLabel}</span>
               <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
             </td>
+            <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
             <td class="row-actions">
               <button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>
             </td>
@@ -824,6 +899,16 @@
     attachRetireHandlers();
     attachSelectHandlers();
     attachSubcatHandlers();
+    attachExportHandlers();
+  }
+
+  function attachExportHandlers() {
+    document.querySelectorAll('[data-export-category]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportCategoryToExcel(btn.getAttribute('data-export-category'));
+      });
+    });
   }
 
   function attachSubcatHandlers() {
@@ -852,7 +937,7 @@
 
     const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
 
-    row.innerHTML = `<td colspan="6">
+    row.innerHTML = `<td colspan="7">
       <div class="subcat-edit-input-row">
         <input type="text" id="groupSubcatInput_${uid}" list="groupSubcatList_${uid}" value="${escapeAttr(currentName)}" placeholder="Subcategory name, e.g. Muffins" />
         <datalist id="groupSubcatList_${uid}">
@@ -1415,6 +1500,7 @@
 
   searchInput.addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); render(); });
   showRetiredCheckbox.addEventListener('change', (e) => { showRetired = e.target.checked; render(); });
+  document.getElementById('exportAllBtn').addEventListener('click', () => exportAllToExcel());
 </script>
 
 </body>
