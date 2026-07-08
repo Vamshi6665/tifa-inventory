@@ -413,6 +413,33 @@
   }
   .toast.visible { opacity: 1; }
   .toast.error-toast { background: var(--error-deep); }
+
+  .role-badge {
+    font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.3); padding: 3px 10px; border-radius: 20px; margin-left: 4px;
+  }
+
+  .access-section-title {
+    font-size: 13px; font-weight: 700; color: var(--pistachio-deep);
+    margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .access-section-title.second { margin-top: 28px; }
+
+  .access-card {
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px;
+  }
+  .access-card-top {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+  }
+  .access-name { font-weight: 600; font-size: 14px; color: var(--pistachio-deep); }
+  .access-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .category-checkboxes { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0; }
+  .category-checkbox-label {
+    display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--pistachio-deep); cursor: pointer;
+  }
+  .access-card-actions { display: flex; gap: 8px; }
 </style>
 </head>
 <body>
@@ -421,6 +448,7 @@
   <div class="brand">
     <div class="brand-mark">T</div>
     <div class="brand-title">Tifa Inventory</div>
+    <span id="roleBadge" class="role-badge" style="display:none;"></span>
   </div>
   <button id="logoutBtn">Sign out</button>
 </header>
@@ -442,6 +470,7 @@
     <div class="tab-row">
       <button class="tab-btn active" id="tabBrowseBtn">Browse inventory</button>
       <button class="tab-btn" id="tabScheduleBtn">Reorder schedule</button>
+      <button class="tab-btn" id="tabManageBtn" style="display:none;">Manage access</button>
     </div>
 
     <div class="stats-strip" id="statsStrip"></div>
@@ -474,6 +503,7 @@
     </div>
 
     <div id="scheduleView" style="display:none;"></div>
+    <div id="manageView" style="display:none;"></div>
   </div>
 
   <aside class="sidebar">
@@ -569,7 +599,12 @@
   const showRetiredCheckbox = document.getElementById('showRetiredCheckbox');
   const tabBrowseBtn = document.getElementById('tabBrowseBtn');
   const tabScheduleBtn = document.getElementById('tabScheduleBtn');
+  const manageView = document.getElementById('manageView');
+  const tabManageBtn = document.getElementById('tabManageBtn');
+  const roleBadge = document.getElementById('roleBadge');
 
+  let currentUserId = null;
+  let currentUserRole = null;
   let allItems = [];
   let allCounts = [];
   let allSchedules = [];
@@ -596,6 +631,29 @@
   (async function checkAuth() {
     const { data } = await supabaseClient.auth.getSession();
     if (!data.session) { window.location.href = 'login.html'; return; }
+
+    currentUserId = data.session.user.id;
+
+    const { data: profile, error } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUserId)
+      .single();
+
+    // Fail closed: anyone without an approved role gets sent back to
+    // login.html, which shows the waiting-for-approval screen.
+    if (error || !profile || (profile.role !== 'admin' && profile.role !== 'employee')) {
+      window.location.href = 'login.html';
+      return;
+    }
+
+    currentUserRole = profile.role;
+    roleBadge.textContent = currentUserRole === 'admin' ? 'Admin' : 'Employee';
+    roleBadge.style.display = '';
+    if (currentUserRole === 'admin') {
+      tabManageBtn.style.display = '';
+    }
+
     loadDashboard();
   })();
 
@@ -1433,23 +1491,185 @@
     renderSchedule();
   }
 
+  // ---------------- Manage Access (admin only) ----------------
+
+  async function renderManageAccess() {
+    manageView.innerHTML = `<div class="empty-state"><h2>Loading…</h2></div>`;
+
+    const categories = [...new Set(allItems.map(i => i.category))].sort();
+
+    const [{ data: pendingProfiles, error: pendingErr }, { data: employeeProfiles, error: empErr }, { data: accessRows, error: accessErr }] = await Promise.all([
+      supabaseClient.from('profiles').select('*').eq('role', 'pending').order('requested_at'),
+      supabaseClient.from('profiles').select('*').eq('role', 'employee').order('email'),
+      supabaseClient.from('category_access').select('*'),
+    ]);
+
+    if (pendingErr || empErr || accessErr) {
+      const err = pendingErr || empErr || accessErr;
+      manageView.innerHTML = `<div class="empty-state"><h2>Couldn't load access data</h2><p>${err.message}</p></div>`;
+      return;
+    }
+
+    const accessByUser = {};
+    (accessRows || []).forEach(row => {
+      if (!accessByUser[row.user_id]) accessByUser[row.user_id] = [];
+      accessByUser[row.user_id].push(row.category);
+    });
+
+    const checkboxRow = (attr, idValue, grantedList) => `
+      <div class="category-checkboxes">
+        ${categories.map(cat => `
+          <label class="category-checkbox-label">
+            <input type="checkbox" ${attr}="${idValue}" value="${escapeAttr(cat)}" ${grantedList.includes(cat) ? 'checked' : ''}>
+            ${cat}
+          </label>
+        `).join('')}
+      </div>`;
+
+    let html = `<div class="access-section-title">Pending requests</div>`;
+
+    if (!pendingProfiles || pendingProfiles.length === 0) {
+      html += `<div class="empty-state" style="padding:40px 20px;"><p style="margin:0;">No pending requests right now.</p></div>`;
+    } else {
+      html += pendingProfiles.map(p => `
+        <div class="access-card">
+          <div class="access-card-top">
+            <div>
+              <div class="access-name">${p.full_name || p.email}</div>
+              <div class="access-meta">${p.email} · requested ${formatDateShort(p.requested_at)}</div>
+            </div>
+          </div>
+          ${checkboxRow('data-approve-cat', p.id, [])}
+          <div class="access-card-actions">
+            <button class="btn btn-primary" data-approve-user="${p.id}">Approve</button>
+            <button class="btn" data-reject-user="${p.id}">Reject</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    html += `<div class="access-section-title second">Current employees</div>`;
+
+    if (!employeeProfiles || employeeProfiles.length === 0) {
+      html += `<div class="empty-state" style="padding:40px 20px;"><p style="margin:0;">No employees added yet.</p></div>`;
+    } else {
+      html += employeeProfiles.map(p => {
+        const granted = accessByUser[p.id] || [];
+        return `
+          <div class="access-card">
+            <div class="access-card-top">
+              <div>
+                <div class="access-name">${p.full_name || p.email}</div>
+                <div class="access-meta">${p.email}</div>
+              </div>
+              <button class="icon-btn danger" data-remove-access="${p.id}" title="Remove access"><i class="ti ti-trash"></i></button>
+            </div>
+            ${checkboxRow('data-edit-cat', p.id, granted)}
+          </div>
+        `;
+      }).join('');
+    }
+
+    manageView.innerHTML = html;
+    attachManageAccessHandlers();
+  }
+
+  function attachManageAccessHandlers() {
+    document.querySelectorAll('[data-approve-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-approve-user');
+        const checked = Array.from(manageView.querySelectorAll(`[data-approve-cat="${userId}"]:checked`)).map(cb => cb.value);
+        if (checked.length === 0) { showToast('Select at least one category before approving.', true); return; }
+
+        const { error: roleError } = await supabaseClient
+          .from('profiles')
+          .update({ role: 'employee', approved_at: new Date().toISOString(), approved_by: currentUserId })
+          .eq('id', userId);
+        if (roleError) { showToast('Could not approve: ' + roleError.message, true); return; }
+
+        const rows = checked.map(cat => ({ user_id: userId, category: cat, granted_by: currentUserId }));
+        const { error: accessError } = await supabaseClient.from('category_access').insert(rows);
+        if (accessError) { showToast('Approved, but access grant failed: ' + accessError.message, true); return; }
+
+        showToast('Approved.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-reject-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-reject-user');
+        const { error } = await supabaseClient.from('profiles').delete().eq('id', userId);
+        if (error) { showToast('Could not reject: ' + error.message, true); return; }
+        showToast('Request rejected.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-remove-access]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-remove-access');
+        const { error: accessError } = await supabaseClient.from('category_access').delete().eq('user_id', userId);
+        if (accessError) { showToast('Could not remove access: ' + accessError.message, true); return; }
+
+        const { error: roleError } = await supabaseClient.from('profiles').update({ role: 'pending' }).eq('id', userId);
+        if (roleError) { showToast('Access removed, but role reset failed: ' + roleError.message, true); return; }
+
+        showToast('Access removed.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-edit-cat]').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const userId = cb.getAttribute('data-edit-cat');
+        const category = cb.value;
+
+        if (cb.checked) {
+          const { error } = await supabaseClient.from('category_access').insert({ user_id: userId, category, granted_by: currentUserId });
+          if (error) { showToast('Could not grant: ' + error.message, true); cb.checked = false; return; }
+          showToast(`Granted ${category}.`);
+        } else {
+          const { error } = await supabaseClient.from('category_access').delete().eq('user_id', userId).eq('category', category);
+          if (error) { showToast('Could not remove: ' + error.message, true); cb.checked = true; return; }
+          showToast(`Removed ${category}.`);
+        }
+      });
+    });
+  }
+
   // ---------------- Tabs ----------------
 
   tabBrowseBtn.addEventListener('click', () => {
     currentTab = 'browse';
     tabBrowseBtn.classList.add('active');
     tabScheduleBtn.classList.remove('active');
+    tabManageBtn.classList.remove('active');
     browseView.style.display = 'block';
     scheduleView.style.display = 'none';
+    manageView.style.display = 'none';
   });
 
   tabScheduleBtn.addEventListener('click', () => {
     currentTab = 'schedule';
     tabScheduleBtn.classList.add('active');
     tabBrowseBtn.classList.remove('active');
+    tabManageBtn.classList.remove('active');
     browseView.style.display = 'none';
     scheduleView.style.display = 'block';
+    manageView.style.display = 'none';
     renderSchedule();
+  });
+
+  tabManageBtn.addEventListener('click', () => {
+    currentTab = 'manage';
+    tabManageBtn.classList.add('active');
+    tabBrowseBtn.classList.remove('active');
+    tabScheduleBtn.classList.remove('active');
+    browseView.style.display = 'none';
+    scheduleView.style.display = 'none';
+    manageView.style.display = 'block';
+    renderManageAccess();
   });
 
   // ---------------- Add item ----------------
