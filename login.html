@@ -325,6 +325,27 @@
     errorMsg.classList.add('error');
   }
 
+  // Supabase encodes failure details directly in the URL when the redirect
+  // back from an OAuth provider fails (e.g. blocked by Google, misconfigured
+  // provider, redirect URL mismatch) — it still redirects here, just with
+  // ?error=... or #error=... attached instead of a session. Previously this
+  // was silently ignored, which is why failures looked like nothing happened.
+  function checkForAuthError() {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search);
+    const errorDescription = hash.get('error_description') || query.get('error_description');
+    const errorCode = hash.get('error_code') || query.get('error_code') || hash.get('error') || query.get('error');
+
+    if (errorDescription || errorCode) {
+      showError('Google sign-in failed: ' + (errorDescription || errorCode).replace(/\+/g, ' '));
+      // Clean the error out of the URL so refreshing doesn't re-trigger it.
+      history.replaceState(null, '', window.location.pathname);
+      return true;
+    }
+    return false;
+  }
+  checkForAuthError();
+
   // Decides what a signed-in session should see: dashboard, or the
   // waiting-for-approval screen.
   let routed = false;
