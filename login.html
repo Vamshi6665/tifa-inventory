@@ -302,7 +302,13 @@
   const SUPABASE_URL = "https://ozrnoorbyiyjpngdffdm.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_TRs7-22RYtwvDtuRaDcdwQ_KRxMzw8G";
 
-  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      flowType: 'implicit',
+      detectSessionInUrl: true,
+      persistSession: true,
+    }
+  });
 
   const loginCard = document.getElementById('loginCard');
   const loadingCard = document.getElementById('loadingCard');
@@ -320,9 +326,12 @@
   }
 
   // Decides what a signed-in session should see: dashboard, or the
-  // waiting-for-approval screen. Runs on page load, and again right after
-  // a successful email/password sign-in.
+  // waiting-for-approval screen.
+  let routed = false;
   async function routeSignedInUser(session) {
+    if (routed) return;
+    routed = true;
+
     loginCard.style.display = 'none';
     loadingCard.style.display = 'block';
 
@@ -344,12 +353,14 @@
     pendingEmail.textContent = session.user.email;
   }
 
-  // On page load: if there's already a session (e.g. redirected back here
-  // after Google sign-in, or a returning visitor), route it. Otherwise the
-  // login form is already visible by default.
-  supabaseClient.auth.getSession().then(({ data }) => {
-    if (data.session) {
-      routeSignedInUser(data.session);
+  // onAuthStateChange fires once the session is actually ready — right after
+  // finishing a Google redirect, right after a fresh email/password sign-in,
+  // or immediately for a returning visitor who was already signed in. This
+  // is more reliable than a single getSession() call, which can run before
+  // the client finishes parsing the token out of the URL.
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session) {
+      routeSignedInUser(session);
     }
   });
 
@@ -380,7 +391,7 @@
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (error) {
       showError('Incorrect email or password. Try again.');
@@ -389,7 +400,7 @@
       return;
     }
 
-    routeSignedInUser(data.session);
+    // onAuthStateChange (above) picks up the resulting session and routes it.
   });
 </script>
 
