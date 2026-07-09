@@ -268,6 +268,11 @@
   .btn-vendor-link:hover { background: #A8701F; transform: translateY(-1px); }
   .btn-vendor-link i { font-size: 15px; }
 
+  .reorder-day-badge {
+    font-size: 11px; font-weight: 700; background: var(--pistachio-tint); color: var(--pistachio-dark);
+    padding: 5px 10px; border-radius: 20px; white-space: nowrap;
+  }
+
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
   .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -580,18 +585,6 @@
 
       <label for="newItemReorderUrl">Reorder link (optional)</label>
       <input type="text" id="newItemReorderUrl" placeholder="https://supplier.com/product" />
-
-      <label for="newItemReorderDay">Reorder day (optional)</label>
-      <select id="newItemReorderDay">
-        <option value="">Not set</option>
-        <option value="Monday">Monday</option>
-        <option value="Tuesday">Tuesday</option>
-        <option value="Wednesday">Wednesday</option>
-        <option value="Thursday">Thursday</option>
-        <option value="Friday">Friday</option>
-        <option value="Saturday">Saturday</option>
-        <option value="Sunday">Sunday</option>
-      </select>
     </div>
     <div class="modal-footer">
       <button class="secondary-action" id="cancelAddItem">Cancel</button>
@@ -953,7 +946,7 @@
         </div>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Reorder Day</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
             <tbody>`;
 
       const subgroups = groupBySubcategory(catItems);
@@ -967,13 +960,18 @@
         const setVendorLinkBtn = currentUserRole === 'admin'
           ? `<button class="icon-btn icon-btn-link" data-edit-vendor-link-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${vendorUrl ? 'Change vendor link' : 'Set vendor link'}"><i class="ti ti-link"></i></button>`
           : '';
+        const reorderDay = groupSchedule ? groupSchedule.reorder_day : null;
+        const reorderDayAdminUi = currentUserRole === 'admin'
+          ? `${reorderDay ? `<span class="reorder-day-badge">Order: ${reorderDay}</span>` : ''}<button class="icon-btn" data-edit-reorder-day-group-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${reorderDay ? 'Change reorder day' : 'Set reorder day'}"><i class="ti ti-calendar"></i></button>`
+          : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
-          <td colspan="9">
+          <td colspan="8">
             <div class="subcat-heading-line" style="flex-wrap:wrap; row-gap:8px;">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
               <div style="display:flex; align-items:center; gap:8px;">
                 ${vendorLinkIcon}
                 ${setVendorLinkBtn}
+                ${reorderDayAdminUi}
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>` : ''}
               </div>
             </div>
@@ -1005,12 +1003,6 @@
               <div class="current-cell" data-location-cell="${item.id}">
                 <span>${item.location ? escapeAttr(item.location) : '—'}</span>
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-location-btn="${item.id}" title="Edit location"><i class="ti ti-edit"></i></button>` : ''}
-              </div>
-            </td>
-            <td>
-              <div class="current-cell" data-reorder-day-cell="${item.id}">
-                <span>${item.reorder_day || '—'}</span>
-                ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-reorder-day-btn="${item.id}" title="Edit reorder day"><i class="ti ti-edit"></i></button>` : ''}
               </div>
             </td>
             <td>
@@ -1046,7 +1038,7 @@
     attachVendorLinkHandlers();
     attachExportHandlers();
     attachLocationHandlers();
-    attachReorderDayHandlers();
+    attachReorderDayGroupHandlers();
   }
 
   function attachLocationHandlers() {
@@ -1096,50 +1088,81 @@
 
   const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
-  function attachReorderDayHandlers() {
-    document.querySelectorAll('[data-edit-reorder-day-btn]').forEach(btn => {
-      btn.addEventListener('click', (e) => { e.stopPropagation(); openReorderDayEditor(btn.getAttribute('data-edit-reorder-day-btn')); });
+  function attachReorderDayGroupHandlers() {
+    document.querySelectorAll('[data-edit-reorder-day-group-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const [category, subcatName] = btn.getAttribute('data-edit-reorder-day-group-btn').split('|||');
+        openReorderDayGroupEditor(category, subcatName);
+      });
     });
   }
 
-  function openReorderDayEditor(itemId) {
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (!item) return;
-    const cell = document.querySelector(`[data-reorder-day-cell="${itemId}"]`);
-    if (!cell) return;
+  function openReorderDayGroupEditor(category, subcatName) {
+    const row = document.querySelector(`[data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}"]`);
+    if (!row) return;
 
-    cell.innerHTML = `<div class="edit-input-row">
-        <select id="reorderDayInput_${itemId}">
+    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+    const currentDay = existingSchedule && existingSchedule.reorder_day ? existingSchedule.reorder_day : '';
+    const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
+
+    row.innerHTML = `<td colspan="8">
+      <div class="subcat-edit-input-row">
+        <span style="font-size:12px; font-weight:600; color: var(--pistachio-deep);">Reorder day for ${subcatName}:</span>
+        <select id="reorderDayGroupInput_${uid}">
           <option value="">Not set</option>
-          ${WEEKDAYS.map(d => `<option value="${d}" ${item.reorder_day === d ? 'selected' : ''}>${d}</option>`).join('')}
+          ${WEEKDAYS.map(d => `<option value="${d}" ${currentDay === d ? 'selected' : ''}>${d}</option>`).join('')}
         </select>
-        <button class="edit-save" data-save-reorder-day="${itemId}">Save</button>
-        <button class="edit-cancel" data-cancel-reorder-day="${itemId}">Cancel</button>
-      </div>`;
-    const input = document.getElementById(`reorderDayInput_${itemId}`);
+        <button class="edit-save" data-save-reorder-day-group="${uid}">Save</button>
+        <button class="edit-cancel" data-cancel-reorder-day-group="${uid}">Cancel</button>
+      </div>
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Admin-only — not shown to employees.</div>
+    </td>`;
+
+    const input = document.getElementById(`reorderDayGroupInput_${uid}`);
     input.focus();
-    cell.querySelector('[data-save-reorder-day]').addEventListener('click', () => saveReorderDay(itemId));
-    cell.querySelector('[data-cancel-reorder-day]').addEventListener('click', () => render());
+    row.querySelector('[data-save-reorder-day-group]').addEventListener('click', () => saveReorderDayGroup(category, subcatName, uid));
+    row.querySelector('[data-cancel-reorder-day-group]').addEventListener('click', () => render());
   }
 
-  async function saveReorderDay(itemId) {
-    const input = document.getElementById(`reorderDayInput_${itemId}`);
-    const newValue = input.value;
+  async function saveReorderDayGroup(category, subcatName, uid) {
+    const input = document.getElementById(`reorderDayGroupInput_${uid}`);
+    const newDay = input.value;
 
-    const { data: updatedRows, error } = await supabaseClient
-      .from('inventory_items')
-      .update({ reorder_day: newValue || null })
-      .eq('id', itemId)
-      .select('updated_at');
-    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    // Same update-first, insert-with-default-if-missing pattern as the
+    // vendor link save — checks the database directly rather than a
+    // client-side cache, and never risks clobbering an existing
+    // reorder_frequency value.
+    const { data: updatedRows, error: updateError } = await supabaseClient
+      .from('subcategory_schedules')
+      .update({ reorder_day: newDay || null })
+      .eq('category', category)
+      .eq('subcategory', subcatName)
+      .select();
+
+    if (updateError) { showToast('Could not save: ' + updateError.message, true); return; }
+
+    let scheduleData = updatedRows;
+
     if (!updatedRows || updatedRows.length === 0) {
-      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      const defaultFreq = CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
+      const { data: insertedRows, error: insertError } = await supabaseClient
+        .from('subcategory_schedules')
+        .insert({ category, subcategory: subcatName, reorder_day: newDay || null, reorder_frequency: defaultFreq })
+        .select();
+
+      if (insertError) { showToast('Could not save: ' + insertError.message, true); return; }
+      scheduleData = insertedRows;
+    }
+
+    if (!scheduleData || scheduleData.length === 0) {
+      showToast('Save did not go through — you may not have permission to set this.', true);
       return;
     }
 
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (item) { item.reorder_day = newValue || null; item.updated_at = updatedRows[0].updated_at; }
-    showToast('Reorder day updated.');
+    allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === subcatName));
+    allSchedules = allSchedules.concat(scheduleData);
+    showToast('Reorder day saved.');
     render();
   }
 
@@ -1178,7 +1201,7 @@
 
     const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
 
-    row.innerHTML = `<td colspan="9">
+    row.innerHTML = `<td colspan="8">
       <div class="subcat-edit-input-row">
         <input type="text" id="groupSubcatInput_${uid}" list="groupSubcatList_${uid}" value="${escapeAttr(currentName)}" placeholder="Subcategory name, e.g. Muffins" />
         <datalist id="groupSubcatList_${uid}">
@@ -1246,7 +1269,7 @@
     const currentVendorUrl = existingSchedule && existingSchedule.vendor_url ? existingSchedule.vendor_url : '';
     const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
 
-    row.innerHTML = `<td colspan="9">
+    row.innerHTML = `<td colspan="8">
       <div class="subcat-edit-input-row">
         <span style="font-size:12px; font-weight:600; color: var(--amber);">Vendor link for ${subcatName}:</span>
         <input type="text" id="vendorLinkInput_${uid}" value="${escapeAttr(currentVendorUrl)}" placeholder="https://supplier.com/product" style="width:260px;" />
@@ -1721,6 +1744,9 @@
       const groupVendorLinkIcon = groupSchedule && groupSchedule.vendor_url
         ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="btn-vendor-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i>Vendor</a>`
         : '';
+      const groupReorderDayBadge = (currentUserRole === 'admin' && groupSchedule && groupSchedule.reorder_day)
+        ? `<span class="reorder-day-badge">Order: ${groupSchedule.reorder_day}</span>`
+        : '';
 
       const itemRows = g.items.map(item => {
         const zero = isZero(item);
@@ -1762,6 +1788,7 @@
               <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
             </select>
             ${groupVendorLinkIcon}
+            ${groupReorderDayBadge}
           </div>
         </div>
         ${isOpen ? `<div class="schedule-subitems">${itemRows}</div>` : ''}
@@ -2060,7 +2087,6 @@
     document.getElementById('newItemPar').value = '';
     document.getElementById('newItemLocation').value = '';
     document.getElementById('newItemReorderUrl').value = '';
-    document.getElementById('newItemReorderDay').value = '';
     updateNewItemSubcategorySuggestions();
     document.getElementById('addItemOverlay').classList.add('visible');
   });
@@ -2077,14 +2103,13 @@
     const parLevel = parRaw === '' ? null : parseFloat(parRaw);
     const location = document.getElementById('newItemLocation').value.trim();
     const reorderUrl = document.getElementById('newItemReorderUrl').value.trim();
-    const reorderDay = document.getElementById('newItemReorderDay').value;
 
     if (!name) { showToast('Enter a name for the item.', true); return; }
 
     const { data, error } = await supabaseClient.from('inventory_items').insert({
       name, category, subcategory: subcategory || null, unit_type: unitType, current_value: current || null,
       par_level: isNaN(parLevel) ? null : parLevel, status: 'active',
-      location: location || null, reorder_url: reorderUrl || null, reorder_day: reorderDay || null,
+      location: location || null, reorder_url: reorderUrl || null,
     }).select();
 
     if (error) { showToast('Could not add item: ' + error.message, true); return; }
