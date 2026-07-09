@@ -302,6 +302,21 @@
   .inline-location-input:hover { border-color: var(--border); background: #FAFAF5; }
   .inline-location-input:focus { outline: none; border-color: var(--pistachio); background: white; box-shadow: 0 0 0 3px rgba(151,214,110,0.2); }
 
+  .inline-threshold-input {
+    width: 55px; padding: 6px 8px; border: 1.5px solid transparent; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--pistachio-deep);
+    background: transparent; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .inline-threshold-input:hover { border-color: var(--border); background: #FAFAF5; }
+  .inline-threshold-input:focus { outline: none; border-color: var(--pistachio); background: white; box-shadow: 0 0 0 3px rgba(151,214,110,0.2); }
+
+  .status-select {
+    font-size: 12px; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; background: white; color: var(--pistachio-deep);
+    font-weight: 600; cursor: pointer; margin-bottom: 4px;
+  }
+  .status-select:focus { outline: none; border-color: var(--pistachio); }
+
   .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .edit-input-row input {
     width: 100px; padding: 6px 8px; border: 1.5px solid var(--pistachio); border-radius: 6px;
@@ -1025,8 +1040,6 @@
           const reorder = needsReorder(item);
           const zero = isZero(item);
           const retired = item.status === 'discontinued';
-          const statusLabel = retired ? 'Retired' : (zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status));
-          const statusClass = retired ? 'status-discontinued' : (zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`));
           const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
           const matchesFilter = itemMatchesFilter(item);
           const rowVisible = matchesSearch && matchesFilter;
@@ -1038,7 +1051,11 @@
             <td>
               <input type="text" class="inline-value-input ${zero ? 'zero-value-input' : ''}" data-current-input="${item.id}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" placeholder="—" />
             </td>
-            <td>${item.par_level ?? '—'}</td>
+            <td>
+              ${currentUserRole === 'admin'
+                ? `<input type="number" step="any" class="inline-threshold-input" data-threshold-input="${item.id}" value="${item.par_level ?? ''}" placeholder="—" />`
+                : `<span>${item.par_level ?? '—'}</span>`}
+            </td>
             <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
             <td>
               ${currentUserRole === 'admin'
@@ -1046,8 +1063,14 @@
                 : `<span>${item.location ? escapeAttr(item.location) : '—'}</span>`}
             </td>
             <td>
-              <span class="status-pill ${statusClass}">${statusLabel}</span>
-              <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
+              <select class="status-select" data-status-select="${item.id}">
+                <option value="active" ${item.status === 'active' ? 'selected' : ''}>Active</option>
+                <option value="seasonal" ${item.status === 'seasonal' ? 'selected' : ''}>Seasonal</option>
+                <option value="hold" ${item.status === 'hold' ? 'selected' : ''}>Hold</option>
+                <option value="trial" ${item.status === 'trial' ? 'selected' : ''}>Trial</option>
+                <option value="discontinued" ${item.status === 'discontinued' ? 'selected' : ''}>Discontinued</option>
+              </select>
+              ${(item.status === 'active' && (zero || reorder)) ? `<span class="status-pill ${zero ? 'status-zero' : 'status-low'}">${zero ? 'Out of stock' : 'Low stock'}</span>` : ''}
             </td>
             <td class="row-actions">
               ${currentUserRole === 'admin' ? `<button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>` : ''}
@@ -1071,7 +1094,8 @@
     attachCategoryToggleHandlers();
     attachCurrentValueInputHandlers(content);
     attachDeleteHandlers();
-    attachRetireHandlers();
+    attachStatusSelectHandlers(content);
+    attachThresholdInputHandlers(content);
     attachSelectHandlers();
     attachSubcatHandlers();
     attachVendorLinkHandlers();
@@ -1430,32 +1454,69 @@
     });
   }
 
-  function attachRetireHandlers() {
-    document.querySelectorAll('[data-retire-toggle]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const itemId = btn.getAttribute('data-retire-toggle');
-        const item = allItems.find(i => String(i.id) === String(itemId));
-        if (!item) return;
-        const newStatus = item.status === 'discontinued' ? 'active' : 'discontinued';
-
-        const { data: updatedRows, error } = await supabaseClient
-          .from('inventory_items')
-          .update({ status: newStatus })
-          .eq('id', itemId)
-          .select('updated_at');
-        if (error) { showToast('Could not update: ' + error.message, true); return; }
-        if (!updatedRows || updatedRows.length === 0) {
-          showToast('Update did not go through — you may not have permission to edit this item.', true);
-          return;
-        }
-
-        item.status = newStatus;
-        item.updated_at = updatedRows[0].updated_at;
-        showToast(newStatus === 'discontinued' ? 'Marked as retired.' : 'Reactivated.');
-        renderStats(); render(); renderSidebar();
+  function attachStatusSelectHandlers(scopeEl) {
+    scopeEl.querySelectorAll('[data-status-select]').forEach(select => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', () => {
+        autoSaveStatus(select.getAttribute('data-status-select'), select.value);
       });
     });
+  }
+
+  async function autoSaveStatus(itemId, newStatus) {
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({ status: newStatus })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (error) { showToast('Could not update: ' + error.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Update did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) { item.status = newStatus; item.updated_at = updatedRows[0].updated_at; }
+    showToast(`Status set to ${newStatus}.`);
+    renderStats(); render(); renderSidebar();
+    if (currentTab === 'schedule') renderSchedule();
+  }
+
+  function attachThresholdInputHandlers(scopeEl) {
+    scopeEl.querySelectorAll('[data-threshold-input]').forEach(input => {
+      const itemId = input.getAttribute('data-threshold-input');
+      const originalValue = input.value;
+      input.addEventListener('blur', () => autoSaveThreshold(itemId, input.value.trim(), originalValue));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    });
+  }
+
+  async function autoSaveThreshold(itemId, newValue, previousValue) {
+    if (newValue === previousValue) return;
+
+    const parsed = newValue === '' ? null : parseFloat(newValue);
+    if (newValue !== '' && isNaN(parsed)) {
+      showToast('Threshold must be a number.', true);
+      render();
+      return;
+    }
+
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({ par_level: parsed })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) { item.par_level = parsed; item.updated_at = updatedRows[0].updated_at; }
+    showToast('Threshold updated.');
+    renderStats(); render(); renderSidebar();
+    if (currentTab === 'schedule') renderSchedule();
   }
 
   function attachDeleteHandlers() {
