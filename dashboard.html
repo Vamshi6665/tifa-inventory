@@ -1270,25 +1270,36 @@
     const input = document.getElementById(`vendorLinkInput_${uid}`);
     const newVendorUrl = input.value.trim();
 
-    // subcategory_schedules requires reorder_frequency on every row. If this
-    // group already has a schedule row (usually created the first time the
-    // Reorder Schedule tab was opened), the upsert only needs to touch
-    // vendor_url. If it doesn't exist yet — e.g. this link is being set from
-    // Browse Inventory before Reorder Schedule was ever visited — fall back
-    // to the same category default used elsewhere, so the insert has a
-    // valid value instead of leaving that required column empty.
-    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
-    const payload = { category, subcategory: subcatName, vendor_url: newVendorUrl || null };
-    if (!existingSchedule) {
-      payload.reorder_frequency = CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
-    }
-
-    const { data: scheduleData, error } = await supabaseClient
+    // Try updating an existing row first. This only ever touches vendor_url,
+    // so it can never disturb a reorder_frequency someone already set —
+    // and whether it affects a row tells us, directly from the database
+    // rather than a client-side cache that might be stale, whether a row
+    // exists at all.
+    const { data: updatedRows, error: updateError } = await supabaseClient
       .from('subcategory_schedules')
-      .upsert([payload], { onConflict: 'category,subcategory' })
+      .update({ vendor_url: newVendorUrl || null })
+      .eq('category', category)
+      .eq('subcategory', subcatName)
       .select();
 
-    if (error) { showToast('Could not save link: ' + error.message, true); return; }
+    if (updateError) { showToast('Could not save link: ' + updateError.message, true); return; }
+
+    let scheduleData = updatedRows;
+
+    if (!updatedRows || updatedRows.length === 0) {
+      // No row existed yet for this group (e.g. Reorder Schedule was never
+      // opened for it) — create one. reorder_frequency is required, so it
+      // gets a sensible default rather than being left empty.
+      const defaultFreq = CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
+      const { data: insertedRows, error: insertError } = await supabaseClient
+        .from('subcategory_schedules')
+        .insert({ category, subcategory: subcatName, vendor_url: newVendorUrl || null, reorder_frequency: defaultFreq })
+        .select();
+
+      if (insertError) { showToast('Could not save link: ' + insertError.message, true); return; }
+      scheduleData = insertedRows;
+    }
+
     if (!scheduleData || scheduleData.length === 0) {
       showToast('Save did not go through — you may not have permission to set this link.', true);
       return;
