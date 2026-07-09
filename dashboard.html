@@ -567,6 +567,18 @@
 
       <label for="newItemReorderUrl">Reorder link (optional)</label>
       <input type="text" id="newItemReorderUrl" placeholder="https://supplier.com/product" />
+
+      <label for="newItemReorderDay">Reorder day (optional)</label>
+      <select id="newItemReorderDay">
+        <option value="">Not set</option>
+        <option value="Monday">Monday</option>
+        <option value="Tuesday">Tuesday</option>
+        <option value="Wednesday">Wednesday</option>
+        <option value="Thursday">Thursday</option>
+        <option value="Friday">Friday</option>
+        <option value="Saturday">Saturday</option>
+        <option value="Sunday">Sunday</option>
+      </select>
     </div>
     <div class="modal-footer">
       <button class="secondary-action" id="cancelAddItem">Cancel</button>
@@ -922,17 +934,25 @@
         </div>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Reorder Day</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
             <tbody>`;
 
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
         const repUnitLabel = subItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label;
+        const groupSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+        const vendorUrl = groupSchedule ? groupSchedule.vendor_url : null;
+        const vendorLinkIcon = vendorUrl
+          ? `<a href="${escapeAttr(vendorUrl)}" target="_blank" rel="noopener" class="icon-btn" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
-          <td colspan="8">
+          <td colspan="9">
             <div class="subcat-heading-line">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
-              <button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>
+              <div style="display:flex; gap:6px;">
+                ${vendorLinkIcon}
+                ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>` : ''}
+              </div>
             </div>
           </td>
         </tr>`;
@@ -962,6 +982,12 @@
               <div class="current-cell" data-location-cell="${item.id}">
                 <span>${item.location ? escapeAttr(item.location) : '—'}</span>
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-location-btn="${item.id}" title="Edit location"><i class="ti ti-edit"></i></button>` : ''}
+              </div>
+            </td>
+            <td>
+              <div class="current-cell" data-reorder-day-cell="${item.id}">
+                <span>${item.reorder_day || '—'}</span>
+                ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-reorder-day-btn="${item.id}" title="Edit reorder day"><i class="ti ti-edit"></i></button>` : ''}
               </div>
             </td>
             <td>
@@ -996,6 +1022,7 @@
     attachSubcatHandlers();
     attachExportHandlers();
     attachLocationHandlers();
+    attachReorderDayHandlers();
   }
 
   function attachLocationHandlers() {
@@ -1043,6 +1070,55 @@
     render();
   }
 
+  const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+  function attachReorderDayHandlers() {
+    document.querySelectorAll('[data-edit-reorder-day-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openReorderDayEditor(btn.getAttribute('data-edit-reorder-day-btn')); });
+    });
+  }
+
+  function openReorderDayEditor(itemId) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cell = document.querySelector(`[data-reorder-day-cell="${itemId}"]`);
+    if (!cell) return;
+
+    cell.innerHTML = `<div class="edit-input-row">
+        <select id="reorderDayInput_${itemId}">
+          <option value="">Not set</option>
+          ${WEEKDAYS.map(d => `<option value="${d}" ${item.reorder_day === d ? 'selected' : ''}>${d}</option>`).join('')}
+        </select>
+        <button class="edit-save" data-save-reorder-day="${itemId}">Save</button>
+        <button class="edit-cancel" data-cancel-reorder-day="${itemId}">Cancel</button>
+      </div>`;
+    const input = document.getElementById(`reorderDayInput_${itemId}`);
+    input.focus();
+    cell.querySelector('[data-save-reorder-day]').addEventListener('click', () => saveReorderDay(itemId));
+    cell.querySelector('[data-cancel-reorder-day]').addEventListener('click', () => render());
+  }
+
+  async function saveReorderDay(itemId) {
+    const input = document.getElementById(`reorderDayInput_${itemId}`);
+    const newValue = input.value;
+
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({ reorder_day: newValue || null })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) { item.reorder_day = newValue || null; item.updated_at = updatedRows[0].updated_at; }
+    showToast('Reorder day updated.');
+    render();
+  }
+
   function attachExportHandlers() {
     document.querySelectorAll('[data-export-category]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1071,6 +1147,8 @@
 
     const repUnitLabel = groupItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label || '';
     const currentName = subcatName === 'Uncategorized' ? '' : subcatName;
+    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+    const currentVendorUrl = existingSchedule && existingSchedule.vendor_url ? existingSchedule.vendor_url : '';
 
     const existingSubcats = [...new Set(
       allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
@@ -1078,17 +1156,18 @@
 
     const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
 
-    row.innerHTML = `<td colspan="8">
+    row.innerHTML = `<td colspan="9">
       <div class="subcat-edit-input-row">
         <input type="text" id="groupSubcatInput_${uid}" list="groupSubcatList_${uid}" value="${escapeAttr(currentName)}" placeholder="Subcategory name, e.g. Muffins" />
         <datalist id="groupSubcatList_${uid}">
           ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
         </datalist>
         <input type="text" id="groupUnitInput_${uid}" value="${escapeAttr(repUnitLabel)}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:210px;" />
+        <input type="text" id="groupVendorUrlInput_${uid}" value="${escapeAttr(currentVendorUrl)}" placeholder="Vendor link, e.g. https://supplier.com" style="width:220px;" />
         <button class="edit-save" data-group-subcat-save="${uid}">Save</button>
         <button class="edit-cancel" data-group-subcat-cancel="${uid}">Cancel</button>
       </div>
-      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory.</div>
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory. Vendor link is admin-only and shared by the whole subcategory.</div>
     </td>`;
 
     const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
@@ -1105,8 +1184,10 @@
   async function saveGroupSubcatEdit(category, oldSubcatName, uid) {
     const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
     const unitInput = document.getElementById(`groupUnitInput_${uid}`);
+    const vendorUrlInput = document.getElementById(`groupVendorUrlInput_${uid}`);
     const newSubcat = nameInput.value.trim();
     const newUnitLabel = unitInput.value.trim();
+    const newVendorUrl = vendorUrlInput.value.trim();
 
     const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === oldSubcatName);
     const ids = groupItems.map(i => i.id);
@@ -1117,6 +1198,23 @@
       .in('id', ids);
 
     if (error) { showToast('Could not save: ' + error.message, true); return; }
+
+    // Vendor link lives at the subcategory-group level, in
+    // subcategory_schedules, keyed by (category, subcategory) — not on the
+    // items themselves. A database trigger blocks this specific field from
+    // being changed by anyone but an admin, regardless of what the UI shows.
+    const targetSubcat = newSubcat || 'Uncategorized';
+    const { data: scheduleData, error: scheduleError } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert([{ category, subcategory: targetSubcat, vendor_url: newVendorUrl || null }], { onConflict: 'category,subcategory' })
+      .select();
+
+    if (scheduleError) {
+      showToast('Saved name/unit, but vendor link failed: ' + scheduleError.message, true);
+    } else if (scheduleData) {
+      allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === oldSubcatName) && !(s.category === category && s.subcategory === targetSubcat));
+      allSchedules = allSchedules.concat(scheduleData);
+    }
 
     ids.forEach(id => {
       const it = allItems.find(i => String(i.id) === String(id));
@@ -1532,6 +1630,10 @@
       const key = g.category + '|||' + g.subcategory;
       const isOpen = !!scheduleExpanded[key];
       const lowInGroup = g.items.filter(needsReorder).length;
+      const groupSchedule = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
+      const groupVendorLinkIcon = groupSchedule && groupSchedule.vendor_url
+        ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="icon-btn" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+        : '';
 
       const itemRows = g.items.map(item => {
         const zero = isZero(item);
@@ -1571,6 +1673,7 @@
             <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
             <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
           </select>
+          ${groupVendorLinkIcon}
         </div>
         ${isOpen ? `<div class="schedule-subitems">${itemRows}</div>` : ''}
       </div>`;
@@ -1864,6 +1967,7 @@
     document.getElementById('newItemPar').value = '';
     document.getElementById('newItemLocation').value = '';
     document.getElementById('newItemReorderUrl').value = '';
+    document.getElementById('newItemReorderDay').value = '';
     updateNewItemSubcategorySuggestions();
     document.getElementById('addItemOverlay').classList.add('visible');
   });
@@ -1880,13 +1984,14 @@
     const parLevel = parRaw === '' ? null : parseFloat(parRaw);
     const location = document.getElementById('newItemLocation').value.trim();
     const reorderUrl = document.getElementById('newItemReorderUrl').value.trim();
+    const reorderDay = document.getElementById('newItemReorderDay').value;
 
     if (!name) { showToast('Enter a name for the item.', true); return; }
 
     const { data, error } = await supabaseClient.from('inventory_items').insert({
       name, category, subcategory: subcategory || null, unit_type: unitType, current_value: current || null,
       par_level: isNaN(parLevel) ? null : parLevel, status: 'active',
-      location: location || null, reorder_url: reorderUrl || null,
+      location: location || null, reorder_url: reorderUrl || null, reorder_day: reorderDay || null,
     }).select();
 
     if (error) { showToast('Could not add item: ' + error.message, true); return; }
