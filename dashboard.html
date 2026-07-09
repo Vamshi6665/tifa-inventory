@@ -254,6 +254,8 @@
   .icon-btn:hover { background: #1F1F1C; color: white; }
   .icon-btn.danger { background: #FBDEDB; color: #C0392B; }
   .icon-btn.danger:hover { background: #C0392B; color: white; }
+  .icon-btn-link { background: rgba(201,134,43,0.15); color: var(--amber); }
+  .icon-btn-link:hover { background: var(--amber); color: white; }
 
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
@@ -706,7 +708,7 @@
   function showToast(msg, isError) {
     toastEl.textContent = msg;
     toastEl.className = 'toast visible' + (isError ? ' error-toast' : '');
-    setTimeout(() => { toastEl.classList.remove('visible'); }, 2600);
+    setTimeout(() => { toastEl.classList.remove('visible'); }, isError ? 6000 : 2600);
   }
 
   function parseValue(text) {
@@ -949,7 +951,10 @@
         const groupSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
         const vendorUrl = groupSchedule ? groupSchedule.vendor_url : null;
         const vendorLinkIcon = vendorUrl
-          ? `<a href="${escapeAttr(vendorUrl)}" target="_blank" rel="noopener" class="icon-btn" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          ? `<a href="${escapeAttr(vendorUrl)}" target="_blank" rel="noopener" class="icon-btn icon-btn-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          : '';
+        const setVendorLinkBtn = currentUserRole === 'admin'
+          ? `<button class="icon-btn icon-btn-link" data-edit-vendor-link-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${vendorUrl ? 'Change vendor link' : 'Set vendor link'}"><i class="ti ti-link"></i></button>`
           : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
           <td colspan="9">
@@ -957,6 +962,7 @@
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
               <div style="display:flex; gap:6px;">
                 ${vendorLinkIcon}
+                ${setVendorLinkBtn}
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>` : ''}
               </div>
             </div>
@@ -1026,6 +1032,7 @@
     attachRetireHandlers();
     attachSelectHandlers();
     attachSubcatHandlers();
+    attachVendorLinkHandlers();
     attachExportHandlers();
     attachLocationHandlers();
     attachReorderDayHandlers();
@@ -1153,8 +1160,6 @@
 
     const repUnitLabel = groupItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label || '';
     const currentName = subcatName === 'Uncategorized' ? '' : subcatName;
-    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
-    const currentVendorUrl = existingSchedule && existingSchedule.vendor_url ? existingSchedule.vendor_url : '';
 
     const existingSubcats = [...new Set(
       allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
@@ -1169,11 +1174,10 @@
           ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
         </datalist>
         <input type="text" id="groupUnitInput_${uid}" value="${escapeAttr(repUnitLabel)}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:210px;" />
-        <input type="text" id="groupVendorUrlInput_${uid}" value="${escapeAttr(currentVendorUrl)}" placeholder="Vendor link, e.g. https://supplier.com" style="width:220px;" />
         <button class="edit-save" data-group-subcat-save="${uid}">Save</button>
         <button class="edit-cancel" data-group-subcat-cancel="${uid}">Cancel</button>
       </div>
-      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory. Vendor link is admin-only and shared by the whole subcategory.</div>
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory.</div>
     </td>`;
 
     const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
@@ -1190,10 +1194,8 @@
   async function saveGroupSubcatEdit(category, oldSubcatName, uid) {
     const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
     const unitInput = document.getElementById(`groupUnitInput_${uid}`);
-    const vendorUrlInput = document.getElementById(`groupVendorUrlInput_${uid}`);
     const newSubcat = nameInput.value.trim();
     const newUnitLabel = unitInput.value.trim();
-    const newVendorUrl = vendorUrlInput.value.trim();
 
     const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === oldSubcatName);
     const ids = groupItems.map(i => i.id);
@@ -1205,28 +1207,72 @@
 
     if (error) { showToast('Could not save: ' + error.message, true); return; }
 
-    // Vendor link lives at the subcategory-group level, in
-    // subcategory_schedules, keyed by (category, subcategory) — not on the
-    // items themselves. A database trigger blocks this specific field from
-    // being changed by anyone but an admin, regardless of what the UI shows.
-    const targetSubcat = newSubcat || 'Uncategorized';
-    const { data: scheduleData, error: scheduleError } = await supabaseClient
-      .from('subcategory_schedules')
-      .upsert([{ category, subcategory: targetSubcat, vendor_url: newVendorUrl || null }], { onConflict: 'category,subcategory' })
-      .select();
-
-    if (scheduleError) {
-      showToast('Saved name/unit, but vendor link failed: ' + scheduleError.message, true);
-    } else if (scheduleData) {
-      allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === oldSubcatName) && !(s.category === category && s.subcategory === targetSubcat));
-      allSchedules = allSchedules.concat(scheduleData);
-    }
-
     ids.forEach(id => {
       const it = allItems.find(i => String(i.id) === String(id));
       if (it) { it.subcategory = newSubcat || null; it.unit_label = newUnitLabel || null; }
     });
     showToast(`Updated ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
+    render();
+  }
+
+  // ---------------- Vendor link (subcategory-group level, own button) ----------------
+
+  function attachVendorLinkHandlers() {
+    document.querySelectorAll('[data-edit-vendor-link-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const [category, subcatName] = btn.getAttribute('data-edit-vendor-link-btn').split('|||');
+        openVendorLinkEditor(category, subcatName);
+      });
+    });
+  }
+
+  function openVendorLinkEditor(category, subcatName) {
+    const row = document.querySelector(`[data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}"]`);
+    if (!row) return;
+
+    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+    const currentVendorUrl = existingSchedule && existingSchedule.vendor_url ? existingSchedule.vendor_url : '';
+    const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
+
+    row.innerHTML = `<td colspan="9">
+      <div class="subcat-edit-input-row">
+        <span style="font-size:12px; font-weight:600; color: var(--amber);">Vendor link for ${subcatName}:</span>
+        <input type="text" id="vendorLinkInput_${uid}" value="${escapeAttr(currentVendorUrl)}" placeholder="https://supplier.com/product" style="width:260px;" />
+        <button class="edit-save" data-save-vendor-link="${uid}">Save</button>
+        <button class="edit-cancel" data-cancel-vendor-link="${uid}">Cancel</button>
+      </div>
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Shared by every item in this subcategory. Only admins can change this.</div>
+    </td>`;
+
+    const input = document.getElementById(`vendorLinkInput_${uid}`);
+    input.focus(); input.select();
+    row.querySelector('[data-save-vendor-link]').addEventListener('click', () => saveVendorLink(category, subcatName, uid));
+    row.querySelector('[data-cancel-vendor-link]').addEventListener('click', () => render());
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveVendorLink(category, subcatName, uid);
+      if (e.key === 'Escape') render();
+    });
+  }
+
+  async function saveVendorLink(category, subcatName, uid) {
+    const input = document.getElementById(`vendorLinkInput_${uid}`);
+    const newVendorUrl = input.value.trim();
+
+    const { data: scheduleData, error } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert([{ category, subcategory: subcatName, vendor_url: newVendorUrl || null }], { onConflict: 'category,subcategory' })
+      .select();
+
+    if (error) { showToast('Could not save link: ' + error.message, true); return; }
+    if (!scheduleData || scheduleData.length === 0) {
+      showToast('Save did not go through — you may not have permission to set this link.', true);
+      return;
+    }
+
+    allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === subcatName));
+    allSchedules = allSchedules.concat(scheduleData);
+    showToast('Vendor link saved.');
     render();
   }
 
@@ -1638,7 +1684,7 @@
       const lowInGroup = g.items.filter(needsReorder).length;
       const groupSchedule = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
       const groupVendorLinkIcon = groupSchedule && groupSchedule.vendor_url
-        ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="icon-btn" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+        ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="icon-btn icon-btn-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
         : '';
 
       const itemRows = g.items.map(item => {
@@ -1646,10 +1692,10 @@
         const reorder = needsReorder(item);
         const valueClass = zero ? 'schedule-subitem-zero' : (reorder ? 'schedule-subitem-low' : '');
         const linkIcon = item.reorder_url
-          ? `<a href="${escapeAttr(item.reorder_url)}" target="_blank" rel="noopener" class="icon-btn" title="Open reorder link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          ? `<a href="${escapeAttr(item.reorder_url)}" target="_blank" rel="noopener" class="icon-btn icon-btn-link" title="Open reorder link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
           : '';
         const editLinkBtn = currentUserRole === 'admin'
-          ? `<button class="icon-btn" data-edit-reorder-url-btn="${item.id}" title="Set reorder link"><i class="ti ti-link"></i></button>`
+          ? `<button class="icon-btn icon-btn-link" data-edit-reorder-url-btn="${item.id}" title="Set reorder link"><i class="ti ti-link"></i></button>`
           : '';
         const showLinkRow = item.reorder_url || currentUserRole === 'admin';
         return `<div class="schedule-subitem" style="flex-direction:column; align-items:stretch; gap:5px;">
@@ -1891,8 +1937,12 @@
     document.querySelectorAll('[data-reject-user]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const userId = btn.getAttribute('data-reject-user');
-        const { error } = await supabaseClient.from('profiles').delete().eq('id', userId);
+        const { data: deletedRows, error } = await supabaseClient.from('profiles').delete().eq('id', userId).select('id');
         if (error) { showToast('Could not reject: ' + error.message, true); return; }
+        if (!deletedRows || deletedRows.length === 0) {
+          showToast('Reject did not go through — run the fix-reject-delete-policy.sql patch in Supabase.', true);
+          return;
+        }
         showToast('Request rejected.');
         renderManageAccess();
       });
