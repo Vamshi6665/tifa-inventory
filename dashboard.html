@@ -541,6 +541,10 @@
       <label for="newItemCategory">Category</label>
       <select id="newItemCategory"></select>
 
+      <label for="newItemSubcategory">Subcategory (optional)</label>
+      <input type="text" id="newItemSubcategory" list="newItemSubcategoryList" placeholder="e.g. Muffins — leave blank for Uncategorized" />
+      <datalist id="newItemSubcategoryList"></datalist>
+
       <label for="newItemUnitType">Unit type</label>
       <select id="newItemUnitType">
         <option value="count">Count (whole numbers)</option>
@@ -736,7 +740,19 @@
     const select = document.getElementById('newItemCategory');
     const categories = [...new Set(allItems.map(i => i.category))].sort();
     select.innerHTML = categories.map(c => `<option value="${escapeAttr(c)}">${c}</option>`).join('');
+    updateNewItemSubcategorySuggestions();
   }
+
+  function updateNewItemSubcategorySuggestions() {
+    const category = document.getElementById('newItemCategory').value;
+    const datalist = document.getElementById('newItemSubcategoryList');
+    const subcats = [...new Set(
+      allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
+    )].sort();
+    datalist.innerHTML = subcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('');
+  }
+
+  document.getElementById('newItemCategory').addEventListener('change', updateNewItemSubcategorySuggestions);
 
   function renderStats() {
     const items = activeItems();
@@ -1125,10 +1141,19 @@
         if (!item) return;
         const newStatus = item.status === 'discontinued' ? 'active' : 'discontinued';
 
-        const { error } = await supabaseClient.from('inventory_items').update({ status: newStatus }).eq('id', itemId);
+        const { data: updatedRows, error } = await supabaseClient
+          .from('inventory_items')
+          .update({ status: newStatus })
+          .eq('id', itemId)
+          .select('updated_at');
         if (error) { showToast('Could not update: ' + error.message, true); return; }
+        if (!updatedRows || updatedRows.length === 0) {
+          showToast('Update did not go through — you may not have permission to edit this item.', true);
+          return;
+        }
 
         item.status = newStatus;
+        item.updated_at = updatedRows[0].updated_at;
         showToast(newStatus === 'discontinued' ? 'Marked as retired.' : 'Reactivated.');
         renderStats(); render(); renderSidebar();
       });
@@ -1157,21 +1182,38 @@
 
     if (pendingDeleteId === 'BULK') {
       const ids = Array.from(selectedIds);
-      const { error } = await supabaseClient.from('inventory_items').delete().in('id', ids);
+      // .select('id') after delete returns exactly the rows that were
+      // actually removed — if a data rule silently blocks the delete,
+      // this comes back empty with no explicit error, so this is the only
+      // reliable way to know it didn't really happen.
+      const { data: deletedRows, error } = await supabaseClient.from('inventory_items').delete().in('id', ids).select('id');
       if (error) { showToast('Could not delete: ' + error.message, true); return; }
-      allItems = allItems.filter(i => !ids.includes(String(i.id)));
-      allCounts = allCounts.filter(c => !ids.includes(String(c.item_id)));
+      if (!deletedRows || deletedRows.length === 0) {
+        showToast('Nothing was deleted — you may not have permission to remove these items.', true);
+        document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+        return;
+      }
+      const deletedIds = deletedRows.map(r => String(r.id));
+      allItems = allItems.filter(i => !deletedIds.includes(String(i.id)));
+      allCounts = allCounts.filter(c => !deletedIds.includes(String(c.item_id)));
       selectedIds.clear();
       pendingDeleteId = null;
       document.getElementById('deleteConfirmOverlay').classList.remove('visible');
-      showToast(`${ids.length} items deleted.`);
+      showToast(deletedIds.length === ids.length
+        ? `${deletedIds.length} items deleted.`
+        : `Only ${deletedIds.length} of ${ids.length} items could be deleted.`, deletedIds.length !== ids.length);
       renderStats(); render(); renderSidebar();
       if (currentTab === 'schedule') renderSchedule();
       return;
     }
 
-    const { error } = await supabaseClient.from('inventory_items').delete().eq('id', pendingDeleteId);
+    const { data: deletedRows, error } = await supabaseClient.from('inventory_items').delete().eq('id', pendingDeleteId).select('id');
     if (error) { showToast('Could not delete: ' + error.message, true); return; }
+    if (!deletedRows || deletedRows.length === 0) {
+      showToast('Nothing was deleted — you may not have permission to remove this item.', true);
+      document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+      return;
+    }
     allItems = allItems.filter(i => String(i.id) !== String(pendingDeleteId));
     allCounts = allCounts.filter(c => String(c.item_id) !== String(pendingDeleteId));
     pendingDeleteId = null;
@@ -1227,8 +1269,20 @@
     const newValue = input.value.trim();
     if (newValue === '') { showToast('Enter a value before saving.', true); return; }
 
-    const { error: updateError } = await supabaseClient.from('inventory_items').update({ current_value: newValue }).eq('id', itemId);
+    // .select('updated_at') returns the row as the database now sees it,
+    // including the updated_at value set by the existing trigger — used
+    // below so "Last Updated" reflects instantly instead of only after a
+    // full page reload.
+    const { data: updatedRows, error: updateError } = await supabaseClient
+      .from('inventory_items')
+      .update({ current_value: newValue })
+      .eq('id', itemId)
+      .select('updated_at');
     if (updateError) { showToast('Could not save: ' + updateError.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
 
     const { error: logError } = await supabaseClient.from('inventory_counts').insert({
       item_id: itemId, recorded_value: newValue, recorded_at: new Date().toISOString(), recorded_by: null, source: 'manual',
@@ -1236,7 +1290,10 @@
     showToast(logError ? 'Saved, but history log failed: ' + logError.message : 'Updated.', !!logError);
 
     const item = allItems.find(i => String(i.id) === String(itemId));
-    if (item) item.current_value = newValue;
+    if (item) {
+      item.current_value = newValue;
+      item.updated_at = updatedRows[0].updated_at;
+    }
     allCounts.push({ item_id: itemId, recorded_value: newValue, recorded_at: new Date().toISOString() });
     renderStats(); render(); renderSidebar();
     if (currentTab === 'schedule') renderSchedule();
@@ -1676,8 +1733,10 @@
 
   document.getElementById('addItemBtn').addEventListener('click', () => {
     document.getElementById('newItemName').value = '';
+    document.getElementById('newItemSubcategory').value = '';
     document.getElementById('newItemCurrent').value = '';
     document.getElementById('newItemPar').value = '';
+    updateNewItemSubcategorySuggestions();
     document.getElementById('addItemOverlay').classList.add('visible');
   });
   document.getElementById('cancelAddItem').addEventListener('click', () => {
@@ -1686,6 +1745,7 @@
   document.getElementById('confirmAddItem').addEventListener('click', async () => {
     const name = document.getElementById('newItemName').value.trim();
     const category = document.getElementById('newItemCategory').value;
+    const subcategory = document.getElementById('newItemSubcategory').value.trim();
     const unitType = document.getElementById('newItemUnitType').value;
     const current = document.getElementById('newItemCurrent').value.trim();
     const parRaw = document.getElementById('newItemPar').value.trim();
@@ -1694,7 +1754,7 @@
     if (!name) { showToast('Enter a name for the item.', true); return; }
 
     const { data, error } = await supabaseClient.from('inventory_items').insert({
-      name, category, unit_type: unitType, current_value: current || null,
+      name, category, subcategory: subcategory || null, unit_type: unitType, current_value: current || null,
       par_level: isNaN(parLevel) ? null : parLevel, status: 'active',
     }).select();
 
