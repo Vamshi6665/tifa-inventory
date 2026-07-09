@@ -1601,20 +1601,35 @@
 
     let html = '';
     for (const category of Object.keys(grouped)) {
-      html += `<div class="sidebar-group-label">${category}</div>`;
-      for (const item of grouped[category]) {
-        const zero = isZero(item);
-        html += `<div class="sidebar-item" data-sidebar-item="${item.id}">
-          <div class="sidebar-item-top">
-            <div class="sidebar-item-name">${item.name}</div>
-            <div class="sidebar-item-value ${zero ? 'zero-value' : ''}">${zero ? 'OUT' : (item.current_value ?? '—')}</div>
-          </div>
-          <button class="sidebar-edit-btn" data-edit-btn="${item.id}">Update</button>
-        </div>`;
+      // Defaults to expanded (matches the previous always-shown behavior)
+      // unless the person has explicitly collapsed this group.
+      const isExpanded = sidebarExpandedState[category] !== false;
+      html += `<button class="sidebar-group-label" data-toggle-sidebar-group="${escapeAttr(category)}">
+        <span>${category}</span>
+        <i class="ti ti-chevron-right sidebar-group-chevron ${isExpanded ? 'rotated' : ''}"></i>
+      </button>`;
+      if (isExpanded) {
+        for (const item of grouped[category]) {
+          const zero = isZero(item);
+          html += `<div class="sidebar-item" data-sidebar-item="${item.id}">
+            <div class="sidebar-item-top">
+              <div class="sidebar-item-name">${item.name}</div>
+              <div class="sidebar-item-value ${zero ? 'zero-value' : ''}">${zero ? 'OUT' : (item.current_value ?? '—')}</div>
+            </div>
+            <button class="sidebar-edit-btn" data-edit-btn="${item.id}">Update</button>
+          </div>`;
+        }
       }
     }
     sidebarBody.innerHTML = html;
     attachEditHandlers('sidebar');
+    document.querySelectorAll('[data-toggle-sidebar-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.getAttribute('data-toggle-sidebar-group');
+        sidebarExpandedState[cat] = !(sidebarExpandedState[cat] !== false);
+        renderSidebar();
+      });
+    });
   }
 
   function maybeShowAlert() {
