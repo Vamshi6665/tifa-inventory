@@ -255,29 +255,31 @@
 
   .row-actions { display: flex; align-items: center; justify-content: flex-start; gap: 6px; white-space: nowrap; }
   .icon-btn {
-    background: #ECECE6; border: none; cursor: pointer; padding: 5px 7px;
-    color: #1F1F1C; border-radius: 6px; display: inline-flex; align-items: center; font-size: 13px;
+    background: #ECECE6; border: none; cursor: pointer; padding: 7px 9px;
+    color: #1F1F1C; border-radius: 7px; display: inline-flex; align-items: center; font-size: 16px;
   }
   .icon-btn:hover { background: #1F1F1C; color: white; }
   .icon-btn.danger { background: #FBDEDB; color: #C0392B; }
   .icon-btn.danger:hover { background: #C0392B; color: white; }
   .icon-btn-link { background: rgba(201,134,43,0.15); color: var(--amber); }
   .icon-btn-link:hover { background: var(--amber); color: white; }
+  .icon-btn-reorder-day { background: var(--pistachio-tint); color: var(--pistachio-dark); }
+  .icon-btn-reorder-day:hover { background: var(--pistachio-dark); color: white; }
 
   .btn-vendor-link {
     background: var(--amber); color: white; border: none;
-    padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif;
-    font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none;
-    display: inline-flex; align-items: center; gap: 7px;
+    padding: 10px 18px; border-radius: 8px; font-family: 'DM Sans', sans-serif;
+    font-size: 13.5px; font-weight: 700; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
     box-shadow: 0 2px 5px rgba(201,134,43,0.35);
     transition: background 0.15s ease, transform 0.12s ease;
   }
   .btn-vendor-link:hover { background: #A8701F; transform: translateY(-1px); }
-  .btn-vendor-link i { font-size: 15px; }
+  .btn-vendor-link i { font-size: 17px; }
 
   .reorder-day-badge {
-    font-size: 11px; font-weight: 700; background: var(--pistachio-tint); color: var(--pistachio-dark);
-    padding: 5px 10px; border-radius: 20px; white-space: nowrap;
+    font-size: 12px; font-weight: 700; background: var(--pistachio-tint); color: var(--pistachio-dark);
+    padding: 6px 12px; border-radius: 20px; white-space: nowrap;
   }
 
   .current-cell { display: flex; align-items: center; gap: 7px; }
@@ -373,10 +375,16 @@
     border: 1px solid var(--border); overflow: hidden;
     max-height: calc(100vh - 40px); display: flex; flex-direction: column;
   }
-  .sidebar-header { background: var(--pistachio-deep); color: white; padding: 16px 18px; }
+  .sidebar-header {
+    background: var(--pistachio-deep); color: white; padding: 16px 18px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer;
+  }
   .sidebar-header h2 { font-family: 'Playfair Display', serif; font-size: 16.5px; margin: 0 0 3px; }
   .sidebar-header p { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .sidebar-chevron { font-size: 20px; transition: transform 0.15s ease; flex-shrink: 0; }
+  .sidebar-chevron.collapsed { transform: rotate(-90deg); }
   .sidebar-body { overflow-y: auto; flex: 1; padding: 6px 0; }
+  .sidebar-body.collapsed { display: none; }
   .sidebar-empty { padding: 36px 20px; text-align: center; color: var(--muted); font-size: 13px; }
   .sidebar-empty i { font-size: 30px; margin-bottom: 10px; color: var(--pistachio); display: block; }
   .sidebar-group-label {
@@ -537,9 +545,12 @@
   </div>
 
   <aside class="sidebar" id="sidebarAside">
-    <div class="sidebar-header">
-      <h2>Reorder list</h2>
-      <p id="sidebarSubtitle">Loading…</p>
+    <div class="sidebar-header" id="sidebarHeaderToggle">
+      <div>
+        <h2>Reorder list</h2>
+        <p id="sidebarSubtitle">Loading…</p>
+      </div>
+      <i class="ti ti-chevron-down sidebar-chevron" id="sidebarChevron"></i>
     </div>
     <div class="sidebar-body" id="sidebarBody"></div>
   </aside>
@@ -715,6 +726,11 @@
 
   document.getElementById('dismissAlert').addEventListener('click', () => {
     alertOverlay.classList.remove('visible');
+  });
+
+  document.getElementById('sidebarHeaderToggle').addEventListener('click', () => {
+    document.getElementById('sidebarBody').classList.toggle('collapsed');
+    document.getElementById('sidebarChevron').classList.toggle('collapsed');
   });
 
   function showToast(msg, isError) {
@@ -954,7 +970,7 @@
         </div>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Last Updated</th><th>Location</th><th>Status</th><th></th></tr></thead>
             <tbody>`;
 
       const subgroups = groupBySubcategory(catItems);
@@ -970,17 +986,17 @@
           : '';
         const reorderDay = groupSchedule ? groupSchedule.reorder_day : null;
         const reorderDayAdminUi = currentUserRole === 'admin'
-          ? `${reorderDay ? `<span class="reorder-day-badge">Order: ${reorderDay}</span>` : ''}<button class="icon-btn" data-edit-reorder-day-group-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${reorderDay ? 'Change reorder day' : 'Set reorder day'}"><i class="ti ti-calendar"></i></button>`
+          ? `${reorderDay ? `<span class="reorder-day-badge">Order: ${reorderDay}</span>` : ''}<button class="icon-btn icon-btn-reorder-day" data-edit-reorder-day-group-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${reorderDay ? 'Change reorder day' : 'Set reorder day'}"><i class="ti ti-calendar"></i></button>`
           : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
           <td colspan="8">
             <div class="subcat-heading-line">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
               <div style="display:flex; align-items:center; gap:8px;">
-                ${vendorLinkIcon}
-                ${setVendorLinkBtn}
-                ${reorderDayAdminUi}
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>` : ''}
+                ${reorderDayAdminUi}
+                ${setVendorLinkBtn}
+                ${vendorLinkIcon}
               </div>
             </div>
           </td>
@@ -1007,6 +1023,7 @@
               </div>
             </td>
             <td>${item.par_level ?? '—'}</td>
+            <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
             <td>
               <div class="current-cell" data-location-cell="${item.id}">
                 <span>${item.location ? escapeAttr(item.location) : '—'}</span>
@@ -1017,7 +1034,6 @@
               <span class="status-pill ${statusClass}">${statusLabel}</span>
               <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
             </td>
-            <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
             <td class="row-actions">
               ${currentUserRole === 'admin' ? `<button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>` : ''}
             </td>
