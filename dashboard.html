@@ -510,7 +510,7 @@
     <div id="manageView" style="display:none;"></div>
   </div>
 
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebarAside">
     <div class="sidebar-header">
       <h2>Reorder list</h2>
       <p id="sidebarSubtitle">Loading…</p>
@@ -683,6 +683,12 @@
       // RLS policy patch (run separately in Supabase), this just keeps the
       // button from showing to someone who can't use it anyway.
       document.getElementById('addItemBtn').style.display = 'none';
+
+      // The Reorder List sidebar is an admin planning tool — hide it
+      // entirely for employees and let the main column use the full width
+      // instead of leaving an empty gap where it used to be.
+      document.getElementById('sidebarAside').style.display = 'none';
+      document.querySelector('.layout').style.gridTemplateColumns = '1fr';
     }
 
     loadDashboard();
