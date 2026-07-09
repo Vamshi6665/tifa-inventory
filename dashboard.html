@@ -284,6 +284,24 @@
 
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
+  .inline-value-input {
+    width: 72px; padding: 6px 8px; border: 1.5px solid transparent; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13.5px; font-weight: 600; color: var(--pistachio-deep);
+    background: transparent; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .inline-value-input:hover { border-color: var(--border); background: #FAFAF5; }
+  .inline-value-input:focus { outline: none; border-color: var(--pistachio); background: white; box-shadow: 0 0 0 3px rgba(151,214,110,0.2); }
+  .inline-value-input.zero-value-input { color: var(--error-deep); }
+  .inline-value-input-sidebar { width: 60px; text-align: right; }
+
+  .inline-location-input {
+    width: 130px; padding: 6px 8px; border: 1.5px solid transparent; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--pistachio-deep);
+    background: transparent; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .inline-location-input:hover { border-color: var(--border); background: #FAFAF5; }
+  .inline-location-input:focus { outline: none; border-color: var(--pistachio); background: white; box-shadow: 0 0 0 3px rgba(151,214,110,0.2); }
+
   .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .edit-input-row input {
     width: 100px; padding: 6px 8px; border: 1.5px solid var(--pistachio); border-radius: 6px;
@@ -1018,18 +1036,14 @@
             <td>${currentUserRole === 'admin' ? `<input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}>` : ''}</td>
             <td>${item.name}</td>
             <td>
-              <div class="current-cell" data-current-cell="${item.id}">
-                <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
-                <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
-              </div>
+              <input type="text" class="inline-value-input ${zero ? 'zero-value-input' : ''}" data-current-input="${item.id}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" placeholder="—" />
             </td>
             <td>${item.par_level ?? '—'}</td>
             <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
             <td>
-              <div class="current-cell" data-location-cell="${item.id}">
-                <span>${item.location ? escapeAttr(item.location) : '—'}</span>
-                ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-location-btn="${item.id}" title="Edit location"><i class="ti ti-edit"></i></button>` : ''}
-              </div>
+              ${currentUserRole === 'admin'
+                ? `<input type="text" class="inline-location-input" data-location-input="${item.id}" value="${item.location ? escapeAttr(item.location) : ''}" placeholder="—" />`
+                : `<span>${item.location ? escapeAttr(item.location) : '—'}</span>`}
             </td>
             <td>
               <span class="status-pill ${statusClass}">${statusLabel}</span>
@@ -1055,44 +1069,28 @@
     renderFilterBanner();
     renderBulkBar();
     attachCategoryToggleHandlers();
-    attachEditHandlers('main');
+    attachCurrentValueInputHandlers(content);
     attachDeleteHandlers();
     attachRetireHandlers();
     attachSelectHandlers();
     attachSubcatHandlers();
     attachVendorLinkHandlers();
     attachExportHandlers();
-    attachLocationHandlers();
+    attachLocationInputHandlers(content);
     attachReorderDayGroupHandlers();
   }
 
-  function attachLocationHandlers() {
-    document.querySelectorAll('[data-edit-location-btn]').forEach(btn => {
-      btn.addEventListener('click', (e) => { e.stopPropagation(); openLocationEditor(btn.getAttribute('data-edit-location-btn')); });
+  function attachLocationInputHandlers(scopeEl) {
+    scopeEl.querySelectorAll('[data-location-input]').forEach(input => {
+      const itemId = input.getAttribute('data-location-input');
+      const originalValue = input.value;
+      input.addEventListener('blur', () => autoSaveLocation(itemId, input.value.trim(), originalValue));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
     });
   }
 
-  function openLocationEditor(itemId) {
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (!item) return;
-    const cell = document.querySelector(`[data-location-cell="${itemId}"]`);
-    if (!cell) return;
-
-    cell.innerHTML = `<div class="edit-input-row">
-        <input type="text" id="locationInput_${itemId}" value="${item.location ? escapeAttr(item.location) : ''}" placeholder="e.g. Back freezer" />
-        <button class="edit-save" data-save-location="${itemId}">Save</button>
-        <button class="edit-cancel" data-cancel-location="${itemId}">Cancel</button>
-      </div>`;
-    const input = document.getElementById(`locationInput_${itemId}`);
-    input.focus(); input.select();
-    cell.querySelector('[data-save-location]').addEventListener('click', () => saveLocation(itemId));
-    cell.querySelector('[data-cancel-location]').addEventListener('click', () => render());
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveLocation(itemId); if (e.key === 'Escape') render(); });
-  }
-
-  async function saveLocation(itemId) {
-    const input = document.getElementById(`locationInput_${itemId}`);
-    const newValue = input.value.trim();
+  async function autoSaveLocation(itemId, newValue, previousValue) {
+    if (newValue === previousValue) return;
 
     const { data: updatedRows, error } = await supabaseClient
       .from('inventory_items')
@@ -1523,51 +1521,25 @@
     if (currentTab === 'schedule') renderSchedule();
   });
 
-  function attachEditHandlers(context) {
-    const scope = context === 'sidebar' ? sidebarBody : (context === 'schedule' ? scheduleView : content);
-    scope.querySelectorAll('[data-edit-btn]').forEach(btn => {
-      btn.addEventListener('click', (e) => { e.stopPropagation(); openEditor(btn.getAttribute('data-edit-btn'), context); });
+  function attachCurrentValueInputHandlers(scopeEl) {
+    scopeEl.querySelectorAll('[data-current-input]').forEach(input => {
+      const itemId = input.getAttribute('data-current-input');
+      const originalValue = input.value;
+      input.addEventListener('blur', () => autoSaveCurrentValue(itemId, input.value.trim(), originalValue));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
     });
   }
 
-  function openEditor(itemId, context) {
-    const item = allItems.find(i => String(i.id) === String(itemId));
-    if (!item) return;
+  async function autoSaveCurrentValue(itemId, newValue, previousValue) {
+    if (newValue === previousValue) return;
 
-    if (context === 'sidebar') {
-      const row = document.querySelector(`[data-sidebar-item="${itemId}"]`);
-      if (!row) return;
-      row.innerHTML = `<div class="edit-input-row">
-          <input type="text" id="editInput_sb_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
-          <button class="edit-save" data-save="${itemId}">Save</button>
-          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
-        </div>`;
-      const input = document.getElementById(`editInput_sb_${itemId}`);
-      input.focus(); input.select();
-      row.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
-      row.querySelector('[data-cancel]').addEventListener('click', () => renderSidebar());
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') renderSidebar(); });
-    } else {
-      const cancelFn = context === 'schedule' ? renderSchedule : render;
-      const cell = document.querySelector(`[data-current-cell="${itemId}"]`);
-      if (!cell) return;
-      cell.innerHTML = `<div class="edit-input-row">
-          <input type="text" id="editInput_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
-          <button class="edit-save" data-save="${itemId}">Save</button>
-          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
-        </div>`;
-      const input = document.getElementById(`editInput_${itemId}`);
-      input.focus(); input.select();
-      cell.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
-      cell.querySelector('[data-cancel]').addEventListener('click', () => cancelFn());
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') cancelFn(); });
+    if (newValue === '') {
+      // Don't allow clearing the field to blank — just re-render so the
+      // input snaps back to showing the last saved value.
+      renderStats(); render(); renderSidebar();
+      if (currentTab === 'schedule') renderSchedule();
+      return;
     }
-  }
-
-  async function saveEdit(itemId) {
-    const input = document.getElementById(`editInput_${itemId}`) || document.getElementById(`editInput_sb_${itemId}`);
-    const newValue = input.value.trim();
-    if (newValue === '') { showToast('Enter a value before saving.', true); return; }
 
     // .select('updated_at') returns the row as the database now sees it,
     // including the updated_at value set by the existing trigger — used
@@ -1631,15 +1603,14 @@
           html += `<div class="sidebar-item" data-sidebar-item="${item.id}">
             <div class="sidebar-item-top">
               <div class="sidebar-item-name">${item.name}</div>
-              <div class="sidebar-item-value ${zero ? 'zero-value' : ''}">${zero ? 'OUT' : (item.current_value ?? '—')}</div>
+              <input type="text" class="inline-value-input inline-value-input-sidebar ${zero ? 'zero-value-input' : ''}" data-current-input="${item.id}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" placeholder="—" />
             </div>
-            <button class="sidebar-edit-btn" data-edit-btn="${item.id}">Update</button>
           </div>`;
         }
       }
     }
     sidebarBody.innerHTML = html;
-    attachEditHandlers('sidebar');
+    attachCurrentValueInputHandlers(sidebarBody);
     document.querySelectorAll('[data-toggle-sidebar-group]').forEach(btn => {
       btn.addEventListener('click', () => {
         const cat = btn.getAttribute('data-toggle-sidebar-group');
@@ -1802,10 +1773,7 @@
         return `<div class="schedule-subitem" style="flex-direction:column; align-items:stretch; gap:5px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <span class="schedule-subitem-name">${item.name}</span>
-            <div class="current-cell" data-current-cell="${item.id}">
-              <span data-current-display="${item.id}" class="${valueClass}">${item.current_value ?? '—'}</span>
-              <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
-            </div>
+            <input type="text" class="inline-value-input ${zero ? 'zero-value-input' : ''}" data-current-input="${item.id}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" placeholder="—" />
           </div>
           ${showLinkRow ? `<div class="current-cell" data-reorder-url-cell="${item.id}" style="justify-content:flex-end;">
             ${linkIcon}
@@ -1870,7 +1838,7 @@
       });
     });
 
-    attachEditHandlers('schedule');
+    attachCurrentValueInputHandlers(scheduleView);
     attachReorderUrlHandlers();
   }
 
