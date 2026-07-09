@@ -1,42 +1,1918 @@
--- Tifa Inventory — Restrict Add/Delete to Admins Only
--- Run this in Supabase → SQL Editor → New Query
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tifa Inventory — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --pistachio: #97D66E;
+    --pistachio-dark: #5CAF3B;
+    --pistachio-deep: #285C1A;
+    --pistachio-tint: #EBF9E0;
+    --page-bg: #FFFFFF;
+    --panel-bg: #FFFFFF;
+    --amber: #C9862B;
+    --error: #A34848;
+    --error-deep: #791F1F;
+    --border: #E9E7DC;
+    --muted: #8A8973;
+  }
 
--- Employees currently have full read/write/insert/delete within their
--- assigned categories, via the "employees scoped access to items" policy
--- from the original migration. This replaces that one policy with two
--- narrower ones: employees keep the ability to read and update items
--- (so they can still update stock counts day to day), but lose the
--- ability to insert new items or delete existing ones.
+  * { box-sizing: border-box; }
 
-drop policy if exists "employees scoped access to items" on inventory_items;
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--pistachio-deep);
+  }
 
-create policy "employees read scoped items" on inventory_items
-  for select
-  using (
-    exists (
-      select 1 from category_access ca
-      where ca.user_id = auth.uid() and ca.category = inventory_items.category
-    )
-  );
+  header {
+    background: var(--pistachio-deep);
+    color: white;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-create policy "employees update scoped items" on inventory_items
-  for update
-  using (
-    exists (
-      select 1 from category_access ca
-      where ca.user_id = auth.uid() and ca.category = inventory_items.category
-    )
-  )
-  with check (
-    exists (
-      select 1 from category_access ca
-      where ca.user_id = auth.uid() and ca.category = inventory_items.category
-    )
-  );
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--pistachio);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif; font-weight: 700; font-size: 16px;
+  }
+  .brand-title { font-family: 'Playfair Display', serif; font-weight: 600; font-size: 17px; }
+  .brand-location { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 1px; }
 
--- No insert or delete policy is created for employees here. Combined with
--- how Postgres RLS works (deny by default unless some policy explicitly
--- allows it), that means only the existing "admins full access to items"
--- policy can satisfy an insert or delete — so only admins can add or
--- remove items, while employees keep full read/update access within
--- whatever categories they've been granted.
+  #logoutBtn {
+    background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white;
+    padding: 8px 16px; border-radius: 6px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; cursor: pointer;
+  }
+  #logoutBtn:hover { background: rgba(255,255,255,0.08); }
+
+  .layout {
+    max-width: 1440px; margin: 0 auto; padding: 28px 24px 80px;
+    display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static !important; order: -1; }
+  }
+
+  .page-top {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  }
+  .page-title { font-family: 'Playfair Display', serif; font-size: 27px; margin: 0 0 4px; }
+  .page-subtitle { color: var(--muted); font-size: 13.5px; margin: 0; }
+
+  .top-actions { display: flex; gap: 8px; }
+  .btn {
+    background: white; border: 1px solid var(--border); color: var(--pistachio-deep);
+    padding: 8px 14px; border-radius: 7px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: #F5F2E8; }
+  .btn-primary { background: var(--pistachio-dark); color: white; border-color: var(--pistachio-dark); box-shadow: 0 1px 3px rgba(63,82,34,0.25); }
+  .btn-primary:hover { background: var(--pistachio-deep); }
+
+  .tab-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tab-btn {
+    background: white; border: 1px solid var(--border); color: var(--muted);
+    padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif;
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+  }
+  .tab-btn.active { background: var(--pistachio-deep); color: white; border-color: var(--pistachio-deep); }
+  .tab-btn:not(.active):hover { background: #F5F2E8; }
+
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;
+  }
+  @media (max-width: 700px) { .stats-strip { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card {
+    border-radius: 12px; padding: 14px 16px; text-align: left; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .stat-card:not([disabled]):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(63,82,34,0.1); }
+  .stat-card.neutral { background: white; border: 1px solid var(--border); }
+  .stat-card.warn { background: #F2E9E9; border: 1px solid transparent; }
+  .stat-card.critical { background: var(--error-deep); border: 1px solid transparent; }
+  .stat-card.stat-active { outline: 2.5px solid var(--pistachio); outline-offset: 2px; }
+  .stat-label { font-size: 11.5px; margin-bottom: 4px; }
+  .stat-card.neutral .stat-label { color: var(--muted); }
+  .stat-card.warn .stat-label { color: var(--error); }
+  .stat-card.critical .stat-label { color: #F0C5C5; }
+  .stat-value { font-size: 22px; font-weight: 500; font-family: 'Playfair Display', serif; }
+  .stat-card.neutral .stat-value { color: var(--pistachio-deep); }
+  .stat-card.warn .stat-value { color: var(--error-deep); }
+  .stat-card.critical .stat-value { color: white; }
+
+  .filter-banner {
+    display: none; align-items: center; justify-content: space-between;
+    background: var(--pistachio-tint); border-radius: 9px; padding: 9px 14px;
+    margin-bottom: 14px; font-size: 13px; color: var(--pistachio-deep);
+  }
+  .filter-banner.visible { display: flex; }
+  .filter-banner button {
+    background: none; border: none; color: var(--pistachio-deep); font-weight: 700;
+    cursor: pointer; font-size: 13px; text-decoration: underline;
+  }
+
+  .bulk-bar {
+    display: none; align-items: center; justify-content: space-between;
+    background: var(--pistachio-deep); color: white; border-radius: 9px;
+    padding: 10px 16px; margin-bottom: 14px; font-size: 13.5px;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar .bulk-actions { display: flex; gap: 8px; }
+  .bulk-bar button {
+    border: none; border-radius: 6px; padding: 7px 12px; font-size: 12.5px;
+    font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+  .bulk-bar .bulk-delete { background: var(--error-deep); color: white; }
+  .bulk-bar .bulk-delete:hover { background: #5E1717; }
+  .bulk-bar .bulk-clear { background: rgba(255,255,255,0.15); color: white; }
+  .bulk-bar .bulk-clear:hover { background: rgba(255,255,255,0.25); }
+
+  .search-row { margin-bottom: 18px; position: relative; display: flex; gap: 10px; align-items: center; }
+  .search-row input[type=text] {
+    flex: 1; padding: 11px 14px 11px 38px; border: 1.5px solid var(--border);
+    border-radius: 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; background: white;
+  }
+  .search-row input:focus { outline: none; border-color: var(--pistachio); }
+  .search-wrap { position: relative; flex: 1; }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; color: var(--muted); pointer-events: none;
+  }
+  .show-retired-toggle {
+    display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+
+  .category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .category-grid { grid-template-columns: 1fr; } }
+
+  .category-card {
+    background: white; border-radius: 12px; border: 1px solid var(--border);
+    overflow: hidden; grid-column: span 1; box-shadow: 0 1px 2px rgba(63,82,34,0.05);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    border-left: 3px solid var(--pistachio);
+  }
+  .category-card:hover { box-shadow: 0 4px 14px rgba(63,82,34,0.09); transform: translateY(-1px); }
+  .category-card.has-low { border-left-color: #D85A30; }
+  .category-card.expanded { grid-column: 1 / -1; }
+  .category-card.hidden-by-search { display: none; }
+
+  .category-card-top { display: flex; align-items: flex-start; }
+
+  .category-toggle {
+    flex: 1; min-width: 0; padding: 15px 16px; background: white; border: none; cursor: pointer;
+    text-align: left; font-family: 'DM Sans', sans-serif; display: block;
+  }
+  .category-toggle:hover { background: #FAFAF5; }
+
+  .category-export-btn { margin: 13px 14px 0 0; flex-shrink: 0; }
+
+  .category-toggle-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .category-toggle-left { display: flex; align-items: center; gap: 9px; }
+  .category-icon { font-size: 18px; color: var(--pistachio-dark); }
+  .category-name { font-size: 13.5px; font-weight: 500; color: var(--pistachio-deep); }
+  .chevron { font-size: 15px; color: var(--muted); transition: transform 0.15s ease; }
+  .category-card.expanded .chevron { transform: rotate(90deg); }
+
+  .category-meta { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+  .category-meta .low-count { color: var(--error-deep); font-weight: 600; }
+
+  .last-updated { font-size: 12px; color: var(--muted); cursor: default; }
+
+  .health-bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--pistachio-tint); }
+  .health-bar .ok-seg { background: var(--pistachio); }
+  .health-bar .low-seg { background: #D85A30; }
+
+  .category-table-wrap { display: none; border-top: 1px solid var(--border); }
+  .category-card.expanded .category-table-wrap { display: block; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th {
+    font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; background: #F7F5EC;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #FAFAF5; }
+  tr.row-hidden-by-search { display: none; }
+  tr.retired-row { opacity: 0.55; }
+
+  tr.subcategory-header-row td {
+    background: var(--pistachio-tint); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--pistachio-dark);
+    padding: 7px 16px;
+  }
+  tr.subcategory-header-row:hover td { background: #E4F3D4; }
+  .subcat-heading-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .subcat-heading-line .icon-btn { padding: 2px 6px; font-size: 10.5px; }
+
+  .subcat-edit-input-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
+  .subcat-edit-input-row input {
+    width: 150px; padding: 5px 8px; border: 1.5px solid var(--pistachio); border-radius: 5px;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; text-transform: none; letter-spacing: normal;
+  }
+
+  .status-pill {
+    display: inline-block; font-size: 10.5px; font-weight: 600; padding: 3px 8px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .status-active { background: var(--pistachio-tint); color: var(--pistachio-dark); }
+  .status-low { background: #F2E9E9; color: var(--error-deep); }
+  .status-zero { background: var(--error-deep); color: white; }
+  .status-seasonal { background: rgba(201,134,43,0.12); color: var(--amber); }
+  .status-hold, .status-trial { background: #EEEDE4; color: var(--muted); }
+  .status-discontinued { background: #EEEDE4; color: var(--muted); }
+
+  .retire-toggle {
+    border: 1px solid var(--border); background: white; color: var(--muted);
+    font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 20px; cursor: pointer;
+    margin-left: 6px;
+  }
+  .retire-toggle:hover { background: #F5F2E8; }
+  .retire-toggle.is-retired { background: var(--pistachio); color: white; border-color: var(--pistachio); }
+
+  .row-actions { display: flex; align-items: center; justify-content: flex-start; gap: 6px; white-space: nowrap; }
+  .icon-btn {
+    background: #ECECE6; border: none; cursor: pointer; padding: 5px 7px;
+    color: #1F1F1C; border-radius: 6px; display: inline-flex; align-items: center; font-size: 13px;
+  }
+  .icon-btn:hover { background: #1F1F1C; color: white; }
+  .icon-btn.danger { background: #FBDEDB; color: #C0392B; }
+  .icon-btn.danger:hover { background: #C0392B; color: white; }
+
+  .current-cell { display: flex; align-items: center; gap: 7px; }
+
+  .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .edit-input-row input {
+    width: 100px; padding: 6px 8px; border: 1.5px solid var(--pistachio); border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+  }
+  .edit-save, .edit-cancel { border: none; border-radius: 6px; padding: 6px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .edit-save { background: var(--pistachio); color: white; }
+  .edit-save:hover { background: var(--pistachio-dark); }
+  .edit-cancel { background: #EEEDE4; color: var(--muted); }
+  .edit-cancel:hover { background: #E4E2D6; }
+
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--muted); }
+  .empty-state h2 { font-family: 'Playfair Display', serif; color: var(--pistachio-deep); font-size: 22px; margin-bottom: 8px; }
+
+  /* Reorder schedule tab */
+  .schedule-toolbar {
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .schedule-toolbar select, .schedule-toolbar input[type=text] {
+    padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; background: white;
+  }
+  .schedule-toolbar label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+
+  .schedule-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 900px) { .schedule-grid { grid-template-columns: 1fr; } }
+
+  .schedule-col { background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .schedule-col-header {
+    padding: 13px 16px; font-size: 13px; font-weight: 700; color: white;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .schedule-col-header.weekly { background: var(--pistachio-dark); }
+  .schedule-col-header.biweekly { background: var(--pistachio); color: var(--pistachio-deep); }
+  .schedule-col-header.monthly { background: var(--pistachio-tint); color: var(--pistachio-deep); }
+  .schedule-col-body { padding: 6px 0; min-height: 60px; }
+
+  .schedule-item-block { border-bottom: 1px solid #F2F0E6; }
+  .schedule-item {
+    padding: 9px 16px; display: flex;
+    justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .schedule-item-toggle {
+    background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 7px;
+    padding: 0; font-family: 'DM Sans', sans-serif; flex: 1; min-width: 0;
+  }
+  .schedule-chevron { font-size: 13px; color: var(--muted); transition: transform 0.12s ease; flex-shrink: 0; }
+  .schedule-chevron.rotated { transform: rotate(90deg); }
+  .schedule-item-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; text-align: left; }
+  .schedule-item-cat { font-size: 10.5px; color: var(--muted); }
+  .schedule-low-badge {
+    font-size: 10px; font-weight: 700; background: #FBDEDB; color: var(--error-deep);
+    padding: 1px 7px; border-radius: 20px; flex-shrink: 0;
+  }
+  .schedule-empty-col { padding: 20px 16px; font-size: 12px; color: var(--muted); text-align: center; }
+
+  .schedule-subitems { background: #FAFAF5; padding: 4px 16px 8px 34px; }
+  .schedule-subitem {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid #EFEEE6; font-size: 12.5px;
+  }
+  .schedule-subitem:last-child { border-bottom: none; }
+  .schedule-subitem-name { color: var(--pistachio-deep); }
+  .schedule-subitem-low { color: var(--error-deep); font-weight: 700; }
+  .schedule-subitem-zero { color: white; background: var(--error-deep); padding: 1px 6px; border-radius: 8px; font-weight: 700; }
+
+  .unassigned-section { background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .unassigned-header { padding: 13px 16px; font-size: 13px; font-weight: 700; color: var(--pistachio-deep); border-bottom: 1px solid var(--border); }
+  .unassigned-item {
+    padding: 10px 16px; border-bottom: 1px solid #F2F0E6; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .suggestion-chip {
+    font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 20px;
+    background: var(--pistachio-tint); color: var(--pistachio-dark); cursor: pointer; border: none;
+  }
+  .suggestion-chip:hover { background: var(--pistachio); color: white; }
+  .no-suggestion { font-size: 11px; color: var(--muted); font-style: italic; }
+
+  .freq-select {
+    font-size: 11.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; background: white; color: var(--pistachio-deep);
+  }
+
+  .sidebar {
+    position: sticky; top: 20px; background: white; border-radius: 12px;
+    border: 1px solid var(--border); overflow: hidden;
+    max-height: calc(100vh - 40px); display: flex; flex-direction: column;
+  }
+  .sidebar-header { background: var(--pistachio-deep); color: white; padding: 16px 18px; }
+  .sidebar-header h2 { font-family: 'Playfair Display', serif; font-size: 16.5px; margin: 0 0 3px; }
+  .sidebar-header p { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .sidebar-body { overflow-y: auto; flex: 1; padding: 6px 0; }
+  .sidebar-empty { padding: 36px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+  .sidebar-empty i { font-size: 30px; margin-bottom: 10px; color: var(--pistachio); display: block; }
+  .sidebar-group-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); padding: 12px 18px 4px;
+  }
+  .sidebar-item { padding: 10px 18px; border-bottom: 1px solid #F2F0E6; }
+  .sidebar-item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .sidebar-item-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .sidebar-item-value { font-size: 11.5px; font-weight: 700; color: var(--error-deep); white-space: nowrap; }
+  .sidebar-item-value.zero-value { background: var(--error-deep); color: white; padding: 2px 7px; border-radius: 10px; }
+  .sidebar-edit-btn {
+    background: none; border: 1px solid var(--border); cursor: pointer;
+    padding: 3px 9px; color: var(--muted); border-radius: 6px; font-size: 11px;
+    margin-top: 6px; font-family: 'DM Sans', sans-serif; font-weight: 600;
+  }
+  .sidebar-edit-btn:hover { background: #F7F5EC; color: var(--pistachio-deep); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(63,82,34,0.5);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--panel-bg); border-radius: 14px; max-width: 460px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+  .modal-header { padding: 22px 26px 14px; border-bottom: 1px solid var(--border); }
+  .modal-header h2 { font-family: 'Playfair Display', serif; font-size: 20px; margin: 0 0 4px; color: var(--pistachio-deep); }
+  .modal-header p { margin: 0; font-size: 13px; color: var(--muted); }
+  .modal-header.danger-header h2 { color: var(--error-deep); }
+  .modal-body { padding: 16px 26px; overflow-y: auto; }
+  .modal-body label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--pistachio-deep); }
+  .modal-body input, .modal-body select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; margin-bottom: 14px; background: white;
+  }
+  .modal-body input:focus, .modal-body select:focus { outline: none; border-color: var(--pistachio); }
+  .alert-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-item-name { font-weight: 600; font-size: 13.5px; }
+  .alert-item-cat { font-size: 11.5px; color: var(--muted); }
+  .alert-item-value { font-size: 12.5px; color: var(--error-deep); font-weight: 600; white-space: nowrap; }
+  .modal-footer { padding: 16px 26px 22px; display: flex; gap: 10px; }
+  .modal-footer button {
+    flex: 1; padding: 12px; border: none; border-radius: 8px;
+    font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  .modal-footer .primary-action { background: var(--pistachio-deep); color: white; }
+  .modal-footer .primary-action:hover { background: #2E3B18; }
+  .modal-footer .primary-action.danger { background: var(--error-deep); }
+  .modal-footer .primary-action.danger:hover { background: #5E1717; }
+  .modal-footer .secondary-action { background: #EEEDE4; color: var(--muted); }
+  .modal-footer .secondary-action:hover { background: #E4E2D6; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--pistachio-deep); color: white; padding: 12px 20px; border-radius: 8px;
+    font-size: 13.5px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 200;
+  }
+  .toast.visible { opacity: 1; }
+  .toast.error-toast { background: var(--error-deep); }
+
+  .role-badge {
+    font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.3); padding: 3px 10px; border-radius: 20px; margin-left: 4px;
+  }
+
+  .access-section-title {
+    font-size: 13px; font-weight: 700; color: var(--pistachio-deep);
+    margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .access-section-title.second { margin-top: 28px; }
+
+  .access-card {
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px;
+  }
+  .access-card-top {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+  }
+  .access-name { font-weight: 600; font-size: 14px; color: var(--pistachio-deep); }
+  .access-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .category-checkboxes { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0; }
+  .category-checkbox-label {
+    display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--pistachio-deep); cursor: pointer;
+  }
+  .access-card-actions { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">T</div>
+    <div>
+      <div class="brand-title">Tifa Inventory</div>
+      <div class="brand-location">Walnut Creek</div>
+    </div>
+    <span id="roleBadge" class="role-badge" style="display:none;"></span>
+  </div>
+  <button id="logoutBtn">Sign out</button>
+</header>
+
+<div class="layout">
+  <div class="main-col">
+    <div class="page-top">
+      <div>
+        <h1 class="page-title">Inventory</h1>
+        <p class="page-subtitle" id="pageSubtitle">Loading…</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-primary" id="addItemBtn"><i class="ti ti-plus"></i>Add item</button>
+        <button class="btn" id="exportAllBtn"><i class="ti ti-file-spreadsheet"></i>Export all</button>
+        <button class="btn" id="toggleAllBtn">Expand all</button>
+      </div>
+    </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" id="tabBrowseBtn">Browse inventory</button>
+      <button class="tab-btn" id="tabScheduleBtn">Reorder schedule</button>
+      <button class="tab-btn" id="tabManageBtn" style="display:none;">Manage access</button>
+    </div>
+
+    <div class="stats-strip" id="statsStrip"></div>
+
+    <div class="filter-banner" id="filterBanner">
+      <span id="filterBannerText"></span>
+      <button id="clearFilterBtn">Clear filter</button>
+    </div>
+
+    <div class="bulk-bar" id="bulkBar">
+      <span id="bulkBarText">0 selected</span>
+      <div class="bulk-actions">
+        <button class="bulk-delete" id="bulkDeleteBtn">Delete selected</button>
+        <button class="bulk-clear" id="bulkClearBtn">Clear selection</button>
+      </div>
+    </div>
+
+    <div id="browseView">
+      <div class="search-row">
+        <div class="search-wrap">
+          <i class="ti ti-search search-icon"></i>
+          <input type="text" id="searchInput" placeholder="Search items by name…" />
+        </div>
+        <label class="show-retired-toggle">
+          <input type="checkbox" id="showRetiredCheckbox" />
+          Show retired items
+        </label>
+      </div>
+      <div class="category-grid" id="content"></div>
+    </div>
+
+    <div id="scheduleView" style="display:none;"></div>
+    <div id="manageView" style="display:none;"></div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Reorder list</h2>
+      <p id="sidebarSubtitle">Loading…</p>
+    </div>
+    <div class="sidebar-body" id="sidebarBody"></div>
+  </aside>
+</div>
+
+<div class="modal-overlay" id="alertOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Items need reordering</h2>
+      <p>Full list is also pinned on the right side of your dashboard.</p>
+    </div>
+    <div class="modal-body" id="alertList"></div>
+    <div class="modal-footer">
+      <button class="primary-action" id="dismissAlert" style="flex:1;">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addItemOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add item</h2>
+      <p>Creates a new item in your inventory database.</p>
+    </div>
+    <div class="modal-body">
+      <label for="newItemName">Name</label>
+      <input type="text" id="newItemName" placeholder="e.g. Vanilla Bean Powder" />
+
+      <label for="newItemCategory">Category</label>
+      <select id="newItemCategory"></select>
+
+      <label for="newItemSubcategory">Subcategory (optional)</label>
+      <input type="text" id="newItemSubcategory" list="newItemSubcategoryList" placeholder="e.g. Muffins — leave blank for Uncategorized" />
+      <datalist id="newItemSubcategoryList"></datalist>
+
+      <label for="newItemUnitType">Unit type</label>
+      <select id="newItemUnitType">
+        <option value="count">Count (whole numbers)</option>
+        <option value="percentage">Percentage remaining</option>
+        <option value="freeform">Freeform (mixed notes)</option>
+      </select>
+
+      <label for="newItemCurrent">Current stock</label>
+      <input type="text" id="newItemCurrent" placeholder="e.g. 12" />
+
+      <label for="newItemPar">Reorder threshold (optional)</label>
+      <input type="text" id="newItemPar" placeholder="e.g. 3" />
+
+      <label for="newItemLocation">Shelf / location (optional)</label>
+      <input type="text" id="newItemLocation" placeholder="e.g. Back freezer, shelf 2" />
+
+      <label for="newItemReorderUrl">Reorder link (optional)</label>
+      <input type="text" id="newItemReorderUrl" placeholder="https://supplier.com/product" />
+    </div>
+    <div class="modal-footer">
+      <button class="secondary-action" id="cancelAddItem">Cancel</button>
+      <button class="primary-action" id="confirmAddItem">Add item</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteConfirmOverlay">
+  <div class="modal">
+    <div class="modal-header danger-header">
+      <h2>Delete this item?</h2>
+      <p id="deleteItemName"></p>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px; color: var(--muted); margin:0;">This permanently removes the item and its full count history. This can't be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="secondary-action" id="cancelDeleteItem">Cancel</button>
+      <button class="primary-action danger" id="confirmDeleteItem">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://ozrnoorbyiyjpngdffdm.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_TRs7-22RYtwvDtuRaDcdwQ_KRxMzw8G";
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const content = document.getElementById('content');
+  const scheduleView = document.getElementById('scheduleView');
+  const browseView = document.getElementById('browseView');
+  const pageSubtitle = document.getElementById('pageSubtitle');
+  const alertOverlay = document.getElementById('alertOverlay');
+  const alertList = document.getElementById('alertList');
+  const toggleAllBtn = document.getElementById('toggleAllBtn');
+  const toastEl = document.getElementById('toast');
+  const searchInput = document.getElementById('searchInput');
+  const sidebarBody = document.getElementById('sidebarBody');
+  const sidebarSubtitle = document.getElementById('sidebarSubtitle');
+  const statsStrip = document.getElementById('statsStrip');
+  const showRetiredCheckbox = document.getElementById('showRetiredCheckbox');
+  const tabBrowseBtn = document.getElementById('tabBrowseBtn');
+  const tabScheduleBtn = document.getElementById('tabScheduleBtn');
+  const manageView = document.getElementById('manageView');
+  const tabManageBtn = document.getElementById('tabManageBtn');
+  const roleBadge = document.getElementById('roleBadge');
+
+  let currentUserId = null;
+  let currentUserRole = null;
+  let allItems = [];
+  let allCounts = [];
+  let allSchedules = [];
+  let expandedState = {};
+  let searchTerm = '';
+  let showRetired = false;
+  let currentTab = 'browse';
+  let scheduleExpanded = {};
+  let pendingDeleteId = null;
+  let activeFilter = null; // null | 'reorder' | 'outofstock'
+  let selectedIds = new Set();
+
+  const CATEGORY_ICONS = {
+    'Gelato': 'ti-ice-cream',
+    'Gelato Supplies': 'ti-package',
+    'Gelato/Drink/Pastry/Chocolate Supplies': 'ti-shopping-bag',
+    'Covertures, Waffle Mix, Coffee, Water & Soda': 'ti-coffee',
+    'Truffles & Chocolates': 'ti-candy',
+    'Cookies & Pastries': 'ti-cookie',
+    'House Supplies': 'ti-home',
+  };
+  function iconFor(category) { return CATEGORY_ICONS[category] || 'ti-box'; }
+
+  (async function checkAuth() {
+    const { data } = await supabaseClient.auth.getSession();
+    if (!data.session) { window.location.href = 'login.html'; return; }
+
+    currentUserId = data.session.user.id;
+
+    const { data: profile, error } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUserId)
+      .single();
+
+    // Fail closed: anyone without an approved role gets sent back to
+    // login.html, which shows the waiting-for-approval screen.
+    if (error || !profile || (profile.role !== 'admin' && profile.role !== 'employee')) {
+      window.location.href = 'login.html';
+      return;
+    }
+
+    currentUserRole = profile.role;
+    roleBadge.textContent = currentUserRole === 'admin' ? 'Admin' : 'Employee';
+    roleBadge.style.display = '';
+    if (currentUserRole === 'admin') {
+      tabManageBtn.style.display = '';
+    } else {
+      // Adding and deleting items is admin-only — the real boundary is the
+      // RLS policy patch (run separately in Supabase), this just keeps the
+      // button from showing to someone who can't use it anyway.
+      document.getElementById('addItemBtn').style.display = 'none';
+    }
+
+    loadDashboard();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  document.getElementById('dismissAlert').addEventListener('click', () => {
+    alertOverlay.classList.remove('visible');
+  });
+
+  function showToast(msg, isError) {
+    toastEl.textContent = msg;
+    toastEl.className = 'toast visible' + (isError ? ' error-toast' : '');
+    setTimeout(() => { toastEl.classList.remove('visible'); }, 2600);
+  }
+
+  function parseValue(text) {
+    if (!text) return null;
+    const match = text.match(/-?\d+(\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+  }
+
+  function activeItems() { return allItems.filter(i => i.status !== 'discontinued'); }
+
+  function needsReorder(item) {
+    if (item.status === 'discontinued') return false;
+    const val = parseValue(item.current_value);
+    if (val === null) return false;
+    if (val <= 0) return true;
+    if (item.par_level !== null && item.par_level !== undefined && val <= item.par_level) return true;
+    return false;
+  }
+
+  function isZero(item) {
+    const val = parseValue(item.current_value);
+    return val !== null && val <= 0;
+  }
+
+  async function loadDashboard() {
+    const [{ data: items, error: itemsErr }, { data: counts, error: countsErr }, schedulesResult] = await Promise.all([
+      supabaseClient.from('inventory_items').select('*').order('category').order('name'),
+      supabaseClient.from('inventory_counts').select('item_id, recorded_value, recorded_at').order('recorded_at'),
+      supabaseClient.from('subcategory_schedules').select('*'),
+    ]);
+
+    if (itemsErr) {
+      pageSubtitle.textContent = 'Something went wrong loading inventory.';
+      content.innerHTML = `<div class="empty-state"><h2>Couldn't load items</h2><p>${itemsErr.message}</p></div>`;
+      return;
+    }
+
+    // subcategory_schedules may not exist yet if the SQL migration hasn't
+    // been run — degrade gracefully rather than breaking the whole page.
+    allSchedules = (schedulesResult && schedulesResult.data) ? schedulesResult.data : [];
+
+    if (!items || items.length === 0) {
+      pageSubtitle.textContent = 'No items yet.';
+      content.innerHTML = `<div class="empty-state"><h2>No inventory items yet</h2><p>Click "Add item" to get started.</p></div>`;
+      sidebarSubtitle.textContent = 'Nothing to reorder yet.';
+      populateCategoryDropdown();
+      return;
+    }
+
+    allItems = items;
+    allCounts = counts || [];
+
+    const catCount = new Set(activeItems().map(i => i.category)).size;
+    pageSubtitle.textContent = `${activeItems().length} active item${activeItems().length === 1 ? '' : 's'} across ${catCount} categories.`;
+
+    populateCategoryDropdown();
+    renderStats();
+    render();
+    renderSidebar();
+    maybeShowAlert();
+  }
+
+  function populateCategoryDropdown() {
+    const select = document.getElementById('newItemCategory');
+    const categories = [...new Set(allItems.map(i => i.category))].sort();
+    select.innerHTML = categories.map(c => `<option value="${escapeAttr(c)}">${c}</option>`).join('');
+    updateNewItemSubcategorySuggestions();
+  }
+
+  function updateNewItemSubcategorySuggestions() {
+    const category = document.getElementById('newItemCategory').value;
+    const datalist = document.getElementById('newItemSubcategoryList');
+    const subcats = [...new Set(
+      allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
+    )].sort();
+    datalist.innerHTML = subcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('');
+  }
+
+  document.getElementById('newItemCategory').addEventListener('change', updateNewItemSubcategorySuggestions);
+
+  function renderStats() {
+    const items = activeItems();
+    const catCount = new Set(items.map(i => i.category)).size;
+    const toReorder = items.filter(needsReorder).length;
+    const outOfStock = items.filter(isZero).length;
+
+    statsStrip.innerHTML = `
+      <button class="stat-card neutral ${activeFilter === null ? 'stat-active' : ''}" data-stat-filter="">
+        <div class="stat-label">Total items</div><div class="stat-value">${items.length}</div>
+      </button>
+      <button class="stat-card neutral" data-stat-filter="" disabled style="cursor:default;">
+        <div class="stat-label">Categories</div><div class="stat-value">${catCount}</div>
+      </button>
+      <button class="stat-card warn ${activeFilter === 'reorder' ? 'stat-active' : ''}" data-stat-filter="reorder">
+        <div class="stat-label">To reorder</div><div class="stat-value">${toReorder}</div>
+      </button>
+      <button class="stat-card critical ${activeFilter === 'outofstock' ? 'stat-active' : ''}" data-stat-filter="outofstock">
+        <div class="stat-label">Out of stock</div><div class="stat-value">${outOfStock}</div>
+      </button>
+    `;
+
+    statsStrip.querySelectorAll('[data-stat-filter]:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.getAttribute('data-stat-filter');
+        activeFilter = val === '' ? null : (activeFilter === val ? null : val);
+        if (currentTab !== 'browse') {
+          tabBrowseBtn.click();
+        }
+        renderStats();
+        render();
+      });
+    });
+  }
+
+  function escapeAttr(str) { return String(str).replace(/"/g, '&quot;'); }
+
+  function formatDateShort(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatDateFull(iso) {
+    if (!iso) return 'No date recorded';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'No date recorded';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function itemsToExportRows(items) {
+    return items.map(item => ({
+      'Item': item.name,
+      'Subcategory': item.subcategory || '',
+      'Unit': item.unit_label || '',
+      'Current Stock': item.current_value || '',
+      'Threshold': item.par_level ?? '',
+      'Status': item.status === 'discontinued' ? 'retired' : item.status,
+      'Supplier': item.supplier || '',
+      'Last Updated': formatDateFull(item.updated_at),
+    }));
+  }
+
+  function safeSheetName(name) {
+    return name.replace(/[\\/*?:\[\]]/g, '-').substring(0, 31);
+  }
+
+  function exportCategoryToExcel(category) {
+    const items = allItems.filter(i => i.category === category && (showRetired || i.status !== 'discontinued'));
+    if (items.length === 0) { showToast('No items to export in this category.', true); return; }
+
+    const ws = XLSX.utils.json_to_sheet(itemsToExportRows(items));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(category));
+    const filename = `${category.replace(/[\\/:*?"<>|]/g, '-')} - Inventory.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast(`Exported ${items.length} item${items.length === 1 ? '' : 's'}.`);
+  }
+
+  function exportAllToExcel() {
+    const categories = [...new Set(allItems.map(i => i.category))];
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set();
+
+    for (const category of categories) {
+      const items = allItems.filter(i => i.category === category && (showRetired || i.status !== 'discontinued'));
+      if (items.length === 0) continue;
+      let sheetName = safeSheetName(category);
+      let suffix = 2;
+      while (usedNames.has(sheetName)) { sheetName = safeSheetName(category).substring(0, 28) + '-' + suffix; suffix++; }
+      usedNames.add(sheetName);
+      const ws = XLSX.utils.json_to_sheet(itemsToExportRows(items));
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+
+    XLSX.writeFile(wb, 'Tifa Inventory - Full Export.xlsx');
+    showToast('Exported all categories.');
+  }
+
+  // ---------------- Browse tab ----------------
+
+  function itemMatchesFilter(item) {
+    if (activeFilter === 'reorder') return needsReorder(item);
+    if (activeFilter === 'outofstock') return isZero(item);
+    return true;
+  }
+
+  function groupBySubcategory(items) {
+    const order = [];
+    const map = {};
+    for (const item of items) {
+      const key = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : '__NONE__';
+      if (!map[key]) { map[key] = []; order.push(key); }
+      map[key].push(item);
+    }
+    // Push "no subcategory" bucket to the end
+    order.sort((a, b) => (a === '__NONE__') - (b === '__NONE__'));
+    return order.map(key => [key === '__NONE__' ? 'Uncategorized' : key, map[key]]);
+  }
+
+  function render() {
+    const visibleItems = showRetired ? allItems : activeItems();
+    const grouped = {};
+    for (const item of visibleItems) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    let html = '';
+    for (const category of Object.keys(grouped)) {
+      const catItems = grouped[category];
+      const lowCount = catItems.filter(needsReorder).length;
+      const okCount = catItems.length - lowCount;
+      const okPct = catItems.length ? Math.round((okCount / catItems.length) * 100) : 100;
+      const isExpanded = !!expandedState[category] || searchTerm.length > 0 || activeFilter !== null;
+
+      html += `<div class="category-card ${isExpanded ? 'expanded' : ''} ${lowCount > 0 ? 'has-low' : ''}" data-category="${escapeAttr(category)}">
+        <div class="category-card-top">
+          <button class="category-toggle" data-toggle-category="${escapeAttr(category)}">
+            <div class="category-toggle-top">
+              <div class="category-toggle-left">
+                <i class="ti ${iconFor(category)} category-icon" aria-hidden="true"></i>
+                <span class="category-name">${category}</span>
+              </div>
+              <i class="ti ti-chevron-right chevron" aria-hidden="true"></i>
+            </div>
+            <div class="category-meta">${catItems.length} items${lowCount > 0 ? ` · <span class="low-count">${lowCount} to reorder</span>` : ''}</div>
+            <div class="health-bar"><div class="ok-seg" style="width:${okPct}%"></div><div class="low-seg" style="width:${100 - okPct}%"></div></div>
+          </button>
+          <button class="icon-btn category-export-btn" data-export-category="${escapeAttr(category)}" title="Export this category to Excel"><i class="ti ti-file-spreadsheet"></i></button>
+        </div>
+        <div class="category-table-wrap">
+          <table>
+            <thead><tr><th style="width:30px;">${currentUserRole === 'admin' ? `<input type="checkbox" data-select-all-in-category="${escapeAttr(category)}">` : ''}</th><th>Item</th><th>Current</th><th>Threshold</th><th>Location</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+            <tbody>`;
+
+      const subgroups = groupBySubcategory(catItems);
+      for (const [subcatName, subItems] of subgroups) {
+        const repUnitLabel = subItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label;
+        html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
+          <td colspan="8">
+            <div class="subcat-heading-line">
+              <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
+              <button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>
+            </div>
+          </td>
+        </tr>`;
+
+        for (const item of subItems) {
+          const reorder = needsReorder(item);
+          const zero = isZero(item);
+          const retired = item.status === 'discontinued';
+          const statusLabel = retired ? 'Retired' : (zero ? 'Out of stock' : (reorder ? 'Low stock' : item.status));
+          const statusClass = retired ? 'status-discontinued' : (zero ? 'status-zero' : (reorder ? 'status-low' : `status-${item.status}`));
+          const matchesSearch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
+          const matchesFilter = itemMatchesFilter(item);
+          const rowVisible = matchesSearch && matchesFilter;
+          const checked = selectedIds.has(String(item.id));
+
+          html += `<tr data-item-id="${item.id}" class="${rowVisible ? '' : 'row-hidden-by-search'} ${retired ? 'retired-row' : ''}">
+            <td>${currentUserRole === 'admin' ? `<input type="checkbox" data-select-item="${item.id}" ${checked ? 'checked' : ''}>` : ''}</td>
+            <td>${item.name}</td>
+            <td>
+              <div class="current-cell" data-current-cell="${item.id}">
+                <span data-current-display="${item.id}">${item.current_value ?? '—'}</span>
+                <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
+              </div>
+            </td>
+            <td>${item.par_level ?? '—'}</td>
+            <td>
+              <div class="current-cell" data-location-cell="${item.id}">
+                <span>${item.location ? escapeAttr(item.location) : '—'}</span>
+                ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-location-btn="${item.id}" title="Edit location"><i class="ti ti-edit"></i></button>` : ''}
+              </div>
+            </td>
+            <td>
+              <span class="status-pill ${statusClass}">${statusLabel}</span>
+              <button class="retire-toggle ${retired ? 'is-retired' : ''}" data-retire-toggle="${item.id}">${retired ? 'Reactivate' : 'Retire'}</button>
+            </td>
+            <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
+            <td class="row-actions">
+              ${currentUserRole === 'admin' ? `<button class="icon-btn danger" data-delete-btn="${item.id}" title="Delete item"><i class="ti ti-trash"></i></button>` : ''}
+            </td>
+          </tr>`;
+        }
+      }
+
+      html += `</tbody></table></div></div>`;
+    }
+
+    content.innerHTML = html || `<div class="empty-state"><h2>No items match</h2></div>`;
+
+    document.querySelectorAll('.category-card').forEach(block => {
+      const visibleRows = block.querySelectorAll('tbody tr:not(.row-hidden-by-search)');
+      block.classList.toggle('hidden-by-search', visibleRows.length === 0 && (searchTerm || activeFilter !== null));
+    });
+
+    renderFilterBanner();
+    renderBulkBar();
+    attachCategoryToggleHandlers();
+    attachEditHandlers('main');
+    attachDeleteHandlers();
+    attachRetireHandlers();
+    attachSelectHandlers();
+    attachSubcatHandlers();
+    attachExportHandlers();
+    attachLocationHandlers();
+  }
+
+  function attachLocationHandlers() {
+    document.querySelectorAll('[data-edit-location-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openLocationEditor(btn.getAttribute('data-edit-location-btn')); });
+    });
+  }
+
+  function openLocationEditor(itemId) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cell = document.querySelector(`[data-location-cell="${itemId}"]`);
+    if (!cell) return;
+
+    cell.innerHTML = `<div class="edit-input-row">
+        <input type="text" id="locationInput_${itemId}" value="${item.location ? escapeAttr(item.location) : ''}" placeholder="e.g. Back freezer" />
+        <button class="edit-save" data-save-location="${itemId}">Save</button>
+        <button class="edit-cancel" data-cancel-location="${itemId}">Cancel</button>
+      </div>`;
+    const input = document.getElementById(`locationInput_${itemId}`);
+    input.focus(); input.select();
+    cell.querySelector('[data-save-location]').addEventListener('click', () => saveLocation(itemId));
+    cell.querySelector('[data-cancel-location]').addEventListener('click', () => render());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveLocation(itemId); if (e.key === 'Escape') render(); });
+  }
+
+  async function saveLocation(itemId) {
+    const input = document.getElementById(`locationInput_${itemId}`);
+    const newValue = input.value.trim();
+
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({ location: newValue || null })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) { item.location = newValue || null; item.updated_at = updatedRows[0].updated_at; }
+    showToast('Location updated.');
+    render();
+  }
+
+  function attachExportHandlers() {
+    document.querySelectorAll('[data-export-category]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportCategoryToExcel(btn.getAttribute('data-export-category'));
+      });
+    });
+  }
+
+  function attachSubcatHandlers() {
+    document.querySelectorAll('[data-edit-group-subcat]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const [category, subcatName] = btn.getAttribute('data-edit-group-subcat').split('|||');
+        openGroupSubcatEditor(category, subcatName);
+      });
+    });
+  }
+
+  function openGroupSubcatEditor(category, subcatName) {
+    const row = document.querySelector(`[data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}"]`);
+    if (!row) return;
+
+    const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === subcatName);
+    if (groupItems.length === 0) return;
+
+    const repUnitLabel = groupItems.find(i => i.unit_label && i.unit_label.trim())?.unit_label || '';
+    const currentName = subcatName === 'Uncategorized' ? '' : subcatName;
+
+    const existingSubcats = [...new Set(
+      allItems.filter(i => i.category === category && i.subcategory).map(i => i.subcategory)
+    )].sort();
+
+    const uid = `${category}_${subcatName}`.replace(/[^a-zA-Z0-9]/g, '_');
+
+    row.innerHTML = `<td colspan="8">
+      <div class="subcat-edit-input-row">
+        <input type="text" id="groupSubcatInput_${uid}" list="groupSubcatList_${uid}" value="${escapeAttr(currentName)}" placeholder="Subcategory name, e.g. Muffins" />
+        <datalist id="groupSubcatList_${uid}">
+          ${existingSubcats.map(s => `<option value="${escapeAttr(s)}"></option>`).join('')}
+        </datalist>
+        <input type="text" id="groupUnitInput_${uid}" value="${escapeAttr(repUnitLabel)}" placeholder="Unit text, e.g. 1 unit = 1 full box" style="width:210px;" />
+        <button class="edit-save" data-group-subcat-save="${uid}">Save</button>
+        <button class="edit-cancel" data-group-subcat-cancel="${uid}">Cancel</button>
+      </div>
+      <div style="font-size:10.5px; color: var(--muted); margin-top:4px;">Applies to all ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} in this subcategory.</div>
+    </td>`;
+
+    const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
+    nameInput.focus(); nameInput.select();
+
+    row.querySelector('[data-group-subcat-save]').addEventListener('click', () => saveGroupSubcatEdit(category, subcatName, uid));
+    row.querySelector('[data-group-subcat-cancel]').addEventListener('click', () => render());
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveGroupSubcatEdit(category, subcatName, uid);
+      if (e.key === 'Escape') render();
+    });
+  }
+
+  async function saveGroupSubcatEdit(category, oldSubcatName, uid) {
+    const nameInput = document.getElementById(`groupSubcatInput_${uid}`);
+    const unitInput = document.getElementById(`groupUnitInput_${uid}`);
+    const newSubcat = nameInput.value.trim();
+    const newUnitLabel = unitInput.value.trim();
+
+    const groupItems = allItems.filter(i => i.category === category && (i.subcategory || 'Uncategorized') === oldSubcatName);
+    const ids = groupItems.map(i => i.id);
+
+    const { error } = await supabaseClient
+      .from('inventory_items')
+      .update({ subcategory: newSubcat || null, unit_label: newUnitLabel || null })
+      .in('id', ids);
+
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+
+    ids.forEach(id => {
+      const it = allItems.find(i => String(i.id) === String(id));
+      if (it) { it.subcategory = newSubcat || null; it.unit_label = newUnitLabel || null; }
+    });
+    showToast(`Updated ${ids.length} item${ids.length === 1 ? '' : 's'}.`);
+    render();
+  }
+
+  function renderFilterBanner() {
+    const banner = document.getElementById('filterBanner');
+    const text = document.getElementById('filterBannerText');
+    if (activeFilter === 'reorder') {
+      text.textContent = 'Showing only items that need reordering.';
+      banner.classList.add('visible');
+    } else if (activeFilter === 'outofstock') {
+      text.textContent = 'Showing only items that are out of stock.';
+      banner.classList.add('visible');
+    } else {
+      banner.classList.remove('visible');
+    }
+  }
+
+  document.getElementById('clearFilterBtn').addEventListener('click', () => {
+    activeFilter = null;
+    renderStats();
+    render();
+  });
+
+  function attachSelectHandlers() {
+    document.querySelectorAll('[data-select-item]').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-select-item');
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderBulkBar();
+      });
+    });
+    document.querySelectorAll('[data-select-all-in-category]').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        const cat = cb.getAttribute('data-select-all-in-category');
+        const catItems = allItems.filter(i => i.category === cat);
+        catItems.forEach(i => { if (cb.checked) selectedIds.add(String(i.id)); else selectedIds.delete(String(i.id)); });
+        render();
+      });
+    });
+  }
+
+  function renderBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    const text = document.getElementById('bulkBarText');
+    if (selectedIds.size > 0) {
+      text.textContent = `${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'} selected`;
+      bar.classList.add('visible');
+    } else {
+      bar.classList.remove('visible');
+    }
+  }
+
+  document.getElementById('bulkClearBtn').addEventListener('click', () => {
+    selectedIds.clear();
+    render();
+  });
+
+  document.getElementById('bulkDeleteBtn').addEventListener('click', () => {
+    if (selectedIds.size === 0) return;
+    document.getElementById('deleteItemName').textContent = `${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}`;
+    pendingDeleteId = 'BULK';
+    document.getElementById('deleteConfirmOverlay').classList.add('visible');
+  });
+
+  function attachCategoryToggleHandlers() {
+    document.querySelectorAll('[data-toggle-category]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.getAttribute('data-toggle-category');
+        expandedState[cat] = !expandedState[cat];
+        render();
+      });
+    });
+  }
+
+  function attachRetireHandlers() {
+    document.querySelectorAll('[data-retire-toggle]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const itemId = btn.getAttribute('data-retire-toggle');
+        const item = allItems.find(i => String(i.id) === String(itemId));
+        if (!item) return;
+        const newStatus = item.status === 'discontinued' ? 'active' : 'discontinued';
+
+        const { data: updatedRows, error } = await supabaseClient
+          .from('inventory_items')
+          .update({ status: newStatus })
+          .eq('id', itemId)
+          .select('updated_at');
+        if (error) { showToast('Could not update: ' + error.message, true); return; }
+        if (!updatedRows || updatedRows.length === 0) {
+          showToast('Update did not go through — you may not have permission to edit this item.', true);
+          return;
+        }
+
+        item.status = newStatus;
+        item.updated_at = updatedRows[0].updated_at;
+        showToast(newStatus === 'discontinued' ? 'Marked as retired.' : 'Reactivated.');
+        renderStats(); render(); renderSidebar();
+      });
+    });
+  }
+
+  function attachDeleteHandlers() {
+    document.querySelectorAll('[data-delete-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pendingDeleteId = btn.getAttribute('data-delete-btn');
+        const item = allItems.find(i => String(i.id) === String(pendingDeleteId));
+        document.getElementById('deleteItemName').textContent = item ? item.name : '';
+        document.getElementById('deleteConfirmOverlay').classList.add('visible');
+      });
+    });
+  }
+
+  document.getElementById('cancelDeleteItem').addEventListener('click', () => {
+    pendingDeleteId = null;
+    document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+  });
+
+  document.getElementById('confirmDeleteItem').addEventListener('click', async () => {
+    if (!pendingDeleteId) return;
+
+    if (pendingDeleteId === 'BULK') {
+      const ids = Array.from(selectedIds);
+      // .select('id') after delete returns exactly the rows that were
+      // actually removed — if a data rule silently blocks the delete,
+      // this comes back empty with no explicit error, so this is the only
+      // reliable way to know it didn't really happen.
+      const { data: deletedRows, error } = await supabaseClient.from('inventory_items').delete().in('id', ids).select('id');
+      if (error) { showToast('Could not delete: ' + error.message, true); return; }
+      if (!deletedRows || deletedRows.length === 0) {
+        showToast('Nothing was deleted — you may not have permission to remove these items.', true);
+        document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+        return;
+      }
+      const deletedIds = deletedRows.map(r => String(r.id));
+      allItems = allItems.filter(i => !deletedIds.includes(String(i.id)));
+      allCounts = allCounts.filter(c => !deletedIds.includes(String(c.item_id)));
+      selectedIds.clear();
+      pendingDeleteId = null;
+      document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+      showToast(deletedIds.length === ids.length
+        ? `${deletedIds.length} items deleted.`
+        : `Only ${deletedIds.length} of ${ids.length} items could be deleted.`, deletedIds.length !== ids.length);
+      renderStats(); render(); renderSidebar();
+      if (currentTab === 'schedule') renderSchedule();
+      return;
+    }
+
+    const { data: deletedRows, error } = await supabaseClient.from('inventory_items').delete().eq('id', pendingDeleteId).select('id');
+    if (error) { showToast('Could not delete: ' + error.message, true); return; }
+    if (!deletedRows || deletedRows.length === 0) {
+      showToast('Nothing was deleted — you may not have permission to remove this item.', true);
+      document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+      return;
+    }
+    allItems = allItems.filter(i => String(i.id) !== String(pendingDeleteId));
+    allCounts = allCounts.filter(c => String(c.item_id) !== String(pendingDeleteId));
+    pendingDeleteId = null;
+    document.getElementById('deleteConfirmOverlay').classList.remove('visible');
+    showToast('Item deleted.');
+    renderStats(); render(); renderSidebar();
+    if (currentTab === 'schedule') renderSchedule();
+  });
+
+  function attachEditHandlers(context) {
+    const scope = context === 'sidebar' ? sidebarBody : (context === 'schedule' ? scheduleView : content);
+    scope.querySelectorAll('[data-edit-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openEditor(btn.getAttribute('data-edit-btn'), context); });
+    });
+  }
+
+  function openEditor(itemId, context) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+
+    if (context === 'sidebar') {
+      const row = document.querySelector(`[data-sidebar-item="${itemId}"]`);
+      if (!row) return;
+      row.innerHTML = `<div class="edit-input-row">
+          <input type="text" id="editInput_sb_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
+          <button class="edit-save" data-save="${itemId}">Save</button>
+          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
+        </div>`;
+      const input = document.getElementById(`editInput_sb_${itemId}`);
+      input.focus(); input.select();
+      row.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
+      row.querySelector('[data-cancel]').addEventListener('click', () => renderSidebar());
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') renderSidebar(); });
+    } else {
+      const cancelFn = context === 'schedule' ? renderSchedule : render;
+      const cell = document.querySelector(`[data-current-cell="${itemId}"]`);
+      if (!cell) return;
+      cell.innerHTML = `<div class="edit-input-row">
+          <input type="text" id="editInput_${itemId}" value="${item.current_value ? escapeAttr(item.current_value) : ''}" />
+          <button class="edit-save" data-save="${itemId}">Save</button>
+          <button class="edit-cancel" data-cancel="${itemId}">Cancel</button>
+        </div>`;
+      const input = document.getElementById(`editInput_${itemId}`);
+      input.focus(); input.select();
+      cell.querySelector('[data-save]').addEventListener('click', () => saveEdit(itemId));
+      cell.querySelector('[data-cancel]').addEventListener('click', () => cancelFn());
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(itemId); if (e.key === 'Escape') cancelFn(); });
+    }
+  }
+
+  async function saveEdit(itemId) {
+    const input = document.getElementById(`editInput_${itemId}`) || document.getElementById(`editInput_sb_${itemId}`);
+    const newValue = input.value.trim();
+    if (newValue === '') { showToast('Enter a value before saving.', true); return; }
+
+    // .select('updated_at') returns the row as the database now sees it,
+    // including the updated_at value set by the existing trigger — used
+    // below so "Last Updated" reflects instantly instead of only after a
+    // full page reload.
+    const { data: updatedRows, error: updateError } = await supabaseClient
+      .from('inventory_items')
+      .update({ current_value: newValue })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (updateError) { showToast('Could not save: ' + updateError.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const { error: logError } = await supabaseClient.from('inventory_counts').insert({
+      item_id: itemId, recorded_value: newValue, recorded_at: new Date().toISOString(), recorded_by: null, source: 'manual',
+    });
+    showToast(logError ? 'Saved, but history log failed: ' + logError.message : 'Updated.', !!logError);
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) {
+      item.current_value = newValue;
+      item.updated_at = updatedRows[0].updated_at;
+    }
+    allCounts.push({ item_id: itemId, recorded_value: newValue, recorded_at: new Date().toISOString() });
+    renderStats(); render(); renderSidebar();
+    if (currentTab === 'schedule') renderSchedule();
+  }
+
+  // ---------------- Sidebar ----------------
+
+  function renderSidebar() {
+    const reorderItems = activeItems().filter(needsReorder);
+    sidebarSubtitle.textContent = reorderItems.length === 0 ? 'Nothing needs reordering right now.' : `${reorderItems.length} item${reorderItems.length === 1 ? '' : 's'} need attention.`;
+
+    if (reorderItems.length === 0) {
+      sidebarBody.innerHTML = `<div class="sidebar-empty"><i class="ti ti-circle-check"></i><div>All stocked up.</div></div>`;
+      return;
+    }
+
+    const grouped = {};
+    for (const item of reorderItems) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    let html = '';
+    for (const category of Object.keys(grouped)) {
+      html += `<div class="sidebar-group-label">${category}</div>`;
+      for (const item of grouped[category]) {
+        const zero = isZero(item);
+        html += `<div class="sidebar-item" data-sidebar-item="${item.id}">
+          <div class="sidebar-item-top">
+            <div class="sidebar-item-name">${item.name}</div>
+            <div class="sidebar-item-value ${zero ? 'zero-value' : ''}">${zero ? 'OUT' : (item.current_value ?? '—')}</div>
+          </div>
+          <button class="sidebar-edit-btn" data-edit-btn="${item.id}">Update</button>
+        </div>`;
+      }
+    }
+    sidebarBody.innerHTML = html;
+    attachEditHandlers('sidebar');
+  }
+
+  function maybeShowAlert() {
+    const lowItems = activeItems().filter(needsReorder);
+    if (lowItems.length > 0) {
+      alertList.innerHTML = lowItems.map(item => `
+        <div class="alert-item">
+          <div><div class="alert-item-name">${item.name}</div><div class="alert-item-cat">${item.category}</div></div>
+          <div class="alert-item-value">${isZero(item) ? 'OUT' : (item.current_value ?? '—')}${item.par_level != null ? ' / threshold ' + item.par_level : ''}</div>
+        </div>`).join('');
+      alertOverlay.classList.add('visible');
+    }
+  }
+
+  // ---------------- Reorder Schedule tab (group-level: category + subcategory) ----------------
+
+  // Reasonable default cadence by category, used when a group has no history
+  // to compute a suggestion from. Based on typical shelf life / turnover for
+  // a gelato and chocolate shop — perishable, frequently-made items lean
+  // weekly; bulk staples and non-perishables lean monthly.
+  const CATEGORY_DEFAULT_FREQUENCY = {
+    'Gelato': 'weekly',
+    'Cookies & Pastries': 'weekly',
+    'Truffles & Chocolates': 'biweekly',
+    'Gelato Supplies': 'biweekly',
+    'Gelato/Drink/Pastry/Chocolate Supplies': 'biweekly',
+    'Covertures, Waffle Mix, Coffee, Water & Soda': 'monthly',
+    'House Supplies': 'monthly',
+  };
+
+  function subcatGroupKey(item) {
+    const sub = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : 'Uncategorized';
+    return item.category + '||' + sub;
+  }
+
+  function suggestFrequencyForGroup(groupItems) {
+    const perItemSuggestions = [];
+    for (const item of groupItems) {
+      const points = allCounts
+        .filter(c => String(c.item_id) === String(item.id))
+        .map(c => ({ date: new Date(c.recorded_at), value: parseValue(c.recorded_value) }))
+        .filter(p => p.value !== null && !isNaN(p.date.getTime()))
+        .sort((a, b) => a.date - b.date);
+
+      if (points.length < 2) continue;
+
+      const restockGapsDays = [];
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].value > points[i - 1].value) {
+          const gapDays = (points[i].date - (restockGapsDays.lastDate || points[0].date)) / 86400000;
+          if (gapDays > 0) restockGapsDays.push(gapDays);
+          restockGapsDays.lastDate = points[i].date;
+        }
+      }
+
+      let avgGap;
+      if (restockGapsDays.length > 0) {
+        avgGap = restockGapsDays.reduce((a, b) => a + b, 0) / restockGapsDays.length;
+      } else {
+        const totalDays = (points[points.length - 1].date - points[0].date) / 86400000;
+        avgGap = totalDays / (points.length - 1);
+      }
+
+      if (isFinite(avgGap) && avgGap > 0) {
+        if (avgGap <= 10) perItemSuggestions.push('weekly');
+        else if (avgGap <= 20) perItemSuggestions.push('biweekly');
+        else if (avgGap <= 45) perItemSuggestions.push('monthly');
+      }
+    }
+
+    if (perItemSuggestions.length > 0) {
+      const counts = { weekly: 0, biweekly: 0, monthly: 0 };
+      perItemSuggestions.forEach(f => counts[f]++);
+      return Object.keys(counts).reduce((a, b) => (counts[a] >= counts[b] ? a : b));
+    }
+
+    const category = groupItems[0] ? groupItems[0].category : null;
+    return CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
+  }
+
+  async function ensureSchedulesPopulated(groups) {
+    const missing = [];
+    for (const g of groups) {
+      const existing = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
+      if (!existing) {
+        missing.push({
+          category: g.category,
+          subcategory: g.subcategory,
+          reorder_frequency: suggestFrequencyForGroup(g.items),
+        });
+      }
+    }
+    if (missing.length === 0) return;
+
+    const { data, error } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert(missing, { onConflict: 'category,subcategory' })
+      .select();
+
+    if (!error && data) {
+      allSchedules = allSchedules.concat(data);
+    }
+  }
+
+  function buildSubcategoryGroups() {
+    const items = activeItems();
+    const map = {};
+    for (const item of items) {
+      const key = subcatGroupKey(item);
+      if (!map[key]) {
+        const sub = item.subcategory && item.subcategory.trim() ? item.subcategory.trim() : 'Uncategorized';
+        map[key] = { category: item.category, subcategory: sub, items: [] };
+      }
+      map[key].items.push(item);
+    }
+    return Object.values(map);
+  }
+
+  async function renderSchedule() {
+    const groups = buildSubcategoryGroups();
+    await ensureSchedulesPopulated(groups);
+
+    const buckets = { weekly: [], biweekly: [], monthly: [] };
+    for (const g of groups) {
+      const sched = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
+      const freq = sched ? sched.reorder_frequency : (CATEGORY_DEFAULT_FREQUENCY[g.category] || 'monthly');
+      if (buckets[freq]) buckets[freq].push(g);
+    }
+
+    const groupRow = (g) => {
+      const key = g.category + '|||' + g.subcategory;
+      const isOpen = !!scheduleExpanded[key];
+      const lowInGroup = g.items.filter(needsReorder).length;
+
+      const itemRows = g.items.map(item => {
+        const zero = isZero(item);
+        const reorder = needsReorder(item);
+        const valueClass = zero ? 'schedule-subitem-zero' : (reorder ? 'schedule-subitem-low' : '');
+        const linkIcon = item.reorder_url
+          ? `<a href="${escapeAttr(item.reorder_url)}" target="_blank" rel="noopener" class="icon-btn" title="Open reorder link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          : '';
+        const editLinkBtn = currentUserRole === 'admin'
+          ? `<button class="icon-btn" data-edit-reorder-url-btn="${item.id}" title="Set reorder link"><i class="ti ti-link"></i></button>`
+          : '';
+        const showLinkRow = item.reorder_url || currentUserRole === 'admin';
+        return `<div class="schedule-subitem" style="flex-direction:column; align-items:stretch; gap:5px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <span class="schedule-subitem-name">${item.name}</span>
+            <div class="current-cell" data-current-cell="${item.id}">
+              <span data-current-display="${item.id}" class="${valueClass}">${item.current_value ?? '—'}</span>
+              <button class="icon-btn" data-edit-btn="${item.id}" title="Update quantity"><i class="ti ti-edit"></i></button>
+            </div>
+          </div>
+          ${showLinkRow ? `<div class="current-cell" data-reorder-url-cell="${item.id}" style="justify-content:flex-end;">
+            ${linkIcon}
+            ${editLinkBtn}
+          </div>` : ''}
+        </div>`;
+      }).join('');
+
+      return `<div class="schedule-item-block">
+        <div class="schedule-item">
+          <button class="schedule-item-toggle" data-toggle-schedule-group="${escapeAttr(key)}">
+            <i class="ti ti-chevron-right schedule-chevron ${isOpen ? 'rotated' : ''}"></i>
+            <span class="schedule-item-name">${g.subcategory}</span>
+            ${lowInGroup > 0 ? `<span class="schedule-low-badge">${lowInGroup}</span>` : ''}
+          </button>
+          <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
+            <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
+            <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
+            <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
+          </select>
+        </div>
+        ${isOpen ? `<div class="schedule-subitems">${itemRows}</div>` : ''}
+      </div>`;
+    };
+
+    const colHtml = (key, label) => {
+      const list = buckets[key];
+      const rows = list.length === 0
+        ? `<div class="schedule-empty-col">No subcategories assigned.</div>`
+        : list.map(groupRow).join('');
+      return `<div class="schedule-col">
+        <div class="schedule-col-header ${key}"><span>${label}</span><span>${list.length}</span></div>
+        <div class="schedule-col-body">${rows}</div>
+      </div>`;
+    };
+
+    scheduleView.innerHTML = `
+      <p style="font-size:12px; color: var(--muted); margin: 0 0 12px;">Change a dropdown to move a subcategory between buckets.</p>
+      <div class="schedule-grid">
+        ${colHtml('weekly', 'Weekly')}
+        ${colHtml('biweekly', 'Biweekly')}
+        ${colHtml('monthly', 'Monthly')}
+      </div>
+    `;
+
+    scheduleView.querySelectorAll('[data-group-reassign]').forEach(select => {
+      select.addEventListener('change', async () => {
+        const [category, subcategory] = select.getAttribute('data-group-reassign').split('|||');
+        await assignGroupFrequency(category, subcategory, select.value);
+      });
+    });
+
+    scheduleView.querySelectorAll('[data-toggle-schedule-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-toggle-schedule-group');
+        scheduleExpanded[key] = !scheduleExpanded[key];
+        renderSchedule();
+      });
+    });
+
+    attachEditHandlers('schedule');
+    attachReorderUrlHandlers();
+  }
+
+  function attachReorderUrlHandlers() {
+    document.querySelectorAll('[data-edit-reorder-url-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openReorderUrlEditor(btn.getAttribute('data-edit-reorder-url-btn')); });
+    });
+  }
+
+  function openReorderUrlEditor(itemId) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cell = document.querySelector(`[data-reorder-url-cell="${itemId}"]`);
+    if (!cell) return;
+
+    cell.innerHTML = `<div class="edit-input-row" style="justify-content:flex-end;">
+        <input type="text" id="reorderUrlInput_${itemId}" value="${item.reorder_url ? escapeAttr(item.reorder_url) : ''}" placeholder="https://supplier.com/product" style="width:180px;" />
+        <button class="edit-save" data-save-reorder-url="${itemId}">Save</button>
+        <button class="edit-cancel" data-cancel-reorder-url="${itemId}">Cancel</button>
+      </div>`;
+    const input = document.getElementById(`reorderUrlInput_${itemId}`);
+    input.focus(); input.select();
+    cell.querySelector('[data-save-reorder-url]').addEventListener('click', () => saveReorderUrl(itemId));
+    cell.querySelector('[data-cancel-reorder-url]').addEventListener('click', () => renderSchedule());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveReorderUrl(itemId); if (e.key === 'Escape') renderSchedule(); });
+  }
+
+  async function saveReorderUrl(itemId) {
+    const input = document.getElementById(`reorderUrlInput_${itemId}`);
+    const newValue = input.value.trim();
+
+    const { data: updatedRows, error } = await supabaseClient
+      .from('inventory_items')
+      .update({ reorder_url: newValue || null })
+      .eq('id', itemId)
+      .select('updated_at');
+    if (error) { showToast('Could not save: ' + error.message, true); return; }
+    if (!updatedRows || updatedRows.length === 0) {
+      showToast('Save did not go through — you may not have permission to edit this item.', true);
+      return;
+    }
+
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (item) { item.reorder_url = newValue || null; item.updated_at = updatedRows[0].updated_at; }
+    showToast('Reorder link updated.');
+    renderSchedule();
+  }
+
+  async function assignGroupFrequency(category, subcategory, freq) {
+    const { data, error } = await supabaseClient
+      .from('subcategory_schedules')
+      .upsert([{ category, subcategory, reorder_frequency: freq }], { onConflict: 'category,subcategory' })
+      .select();
+
+    if (error) { showToast('Could not update: ' + error.message, true); return; }
+
+    allSchedules = allSchedules.filter(s => !(s.category === category && s.subcategory === subcategory));
+    if (data) allSchedules = allSchedules.concat(data);
+    showToast(`${subcategory} set to ${freq}.`);
+    renderSchedule();
+  }
+
+  // ---------------- Manage Access (admin only) ----------------
+
+  async function renderManageAccess() {
+    manageView.innerHTML = `<div class="empty-state"><h2>Loading…</h2></div>`;
+
+    const categories = [...new Set(allItems.map(i => i.category))].sort();
+
+    const [{ data: pendingProfiles, error: pendingErr }, { data: employeeProfiles, error: empErr }, { data: accessRows, error: accessErr }] = await Promise.all([
+      supabaseClient.from('profiles').select('*').eq('role', 'pending').order('requested_at'),
+      supabaseClient.from('profiles').select('*').eq('role', 'employee').order('email'),
+      supabaseClient.from('category_access').select('*'),
+    ]);
+
+    if (pendingErr || empErr || accessErr) {
+      const err = pendingErr || empErr || accessErr;
+      manageView.innerHTML = `<div class="empty-state"><h2>Couldn't load access data</h2><p>${err.message}</p></div>`;
+      return;
+    }
+
+    const accessByUser = {};
+    (accessRows || []).forEach(row => {
+      if (!accessByUser[row.user_id]) accessByUser[row.user_id] = [];
+      accessByUser[row.user_id].push(row.category);
+    });
+
+    const checkboxRow = (attr, idValue, grantedList) => `
+      <div class="category-checkboxes">
+        ${categories.map(cat => `
+          <label class="category-checkbox-label">
+            <input type="checkbox" ${attr}="${idValue}" value="${escapeAttr(cat)}" ${grantedList.includes(cat) ? 'checked' : ''}>
+            ${cat}
+          </label>
+        `).join('')}
+      </div>`;
+
+    let html = `<div class="access-section-title">Pending requests</div>`;
+
+    if (!pendingProfiles || pendingProfiles.length === 0) {
+      html += `<div class="empty-state" style="padding:40px 20px;"><p style="margin:0;">No pending requests right now.</p></div>`;
+    } else {
+      html += pendingProfiles.map(p => `
+        <div class="access-card">
+          <div class="access-card-top">
+            <div>
+              <div class="access-name">${p.full_name || p.email}</div>
+              <div class="access-meta">${p.email} · requested ${formatDateShort(p.requested_at)}</div>
+            </div>
+          </div>
+          ${checkboxRow('data-approve-cat', p.id, [])}
+          <div class="access-card-actions">
+            <button class="btn btn-primary" data-approve-user="${p.id}">Approve</button>
+            <button class="btn" data-reject-user="${p.id}">Reject</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    html += `<div class="access-section-title second">Current employees</div>`;
+
+    if (!employeeProfiles || employeeProfiles.length === 0) {
+      html += `<div class="empty-state" style="padding:40px 20px;"><p style="margin:0;">No employees added yet.</p></div>`;
+    } else {
+      html += employeeProfiles.map(p => {
+        const granted = accessByUser[p.id] || [];
+        return `
+          <div class="access-card">
+            <div class="access-card-top">
+              <div>
+                <div class="access-name">${p.full_name || p.email}</div>
+                <div class="access-meta">${p.email}</div>
+              </div>
+              <button class="icon-btn danger" data-remove-access="${p.id}" title="Remove access"><i class="ti ti-trash"></i></button>
+            </div>
+            ${checkboxRow('data-edit-cat', p.id, granted)}
+          </div>
+        `;
+      }).join('');
+    }
+
+    manageView.innerHTML = html;
+    attachManageAccessHandlers();
+  }
+
+  function attachManageAccessHandlers() {
+    document.querySelectorAll('[data-approve-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-approve-user');
+        const checked = Array.from(manageView.querySelectorAll(`[data-approve-cat="${userId}"]:checked`)).map(cb => cb.value);
+        if (checked.length === 0) { showToast('Select at least one category before approving.', true); return; }
+
+        const { error: roleError } = await supabaseClient
+          .from('profiles')
+          .update({ role: 'employee', approved_at: new Date().toISOString(), approved_by: currentUserId })
+          .eq('id', userId);
+        if (roleError) { showToast('Could not approve: ' + roleError.message, true); return; }
+
+        const rows = checked.map(cat => ({ user_id: userId, category: cat, granted_by: currentUserId }));
+        const { error: accessError } = await supabaseClient.from('category_access').insert(rows);
+        if (accessError) { showToast('Approved, but access grant failed: ' + accessError.message, true); return; }
+
+        showToast('Approved.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-reject-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-reject-user');
+        const { error } = await supabaseClient.from('profiles').delete().eq('id', userId);
+        if (error) { showToast('Could not reject: ' + error.message, true); return; }
+        showToast('Request rejected.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-remove-access]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.getAttribute('data-remove-access');
+        const { error: accessError } = await supabaseClient.from('category_access').delete().eq('user_id', userId);
+        if (accessError) { showToast('Could not remove access: ' + accessError.message, true); return; }
+
+        const { error: roleError } = await supabaseClient.from('profiles').update({ role: 'pending' }).eq('id', userId);
+        if (roleError) { showToast('Access removed, but role reset failed: ' + roleError.message, true); return; }
+
+        showToast('Access removed.');
+        renderManageAccess();
+      });
+    });
+
+    document.querySelectorAll('[data-edit-cat]').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const userId = cb.getAttribute('data-edit-cat');
+        const category = cb.value;
+
+        if (cb.checked) {
+          const { error } = await supabaseClient.from('category_access').insert({ user_id: userId, category, granted_by: currentUserId });
+          if (error) { showToast('Could not grant: ' + error.message, true); cb.checked = false; return; }
+          showToast(`Granted ${category}.`);
+        } else {
+          const { error } = await supabaseClient.from('category_access').delete().eq('user_id', userId).eq('category', category);
+          if (error) { showToast('Could not remove: ' + error.message, true); cb.checked = true; return; }
+          showToast(`Removed ${category}.`);
+        }
+      });
+    });
+  }
+
+  // ---------------- Tabs ----------------
+
+  tabBrowseBtn.addEventListener('click', () => {
+    currentTab = 'browse';
+    tabBrowseBtn.classList.add('active');
+    tabScheduleBtn.classList.remove('active');
+    tabManageBtn.classList.remove('active');
+    browseView.style.display = 'block';
+    scheduleView.style.display = 'none';
+    manageView.style.display = 'none';
+  });
+
+  tabScheduleBtn.addEventListener('click', () => {
+    currentTab = 'schedule';
+    tabScheduleBtn.classList.add('active');
+    tabBrowseBtn.classList.remove('active');
+    tabManageBtn.classList.remove('active');
+    browseView.style.display = 'none';
+    scheduleView.style.display = 'block';
+    manageView.style.display = 'none';
+    renderSchedule();
+  });
+
+  tabManageBtn.addEventListener('click', () => {
+    currentTab = 'manage';
+    tabManageBtn.classList.add('active');
+    tabBrowseBtn.classList.remove('active');
+    tabScheduleBtn.classList.remove('active');
+    browseView.style.display = 'none';
+    scheduleView.style.display = 'none';
+    manageView.style.display = 'block';
+    renderManageAccess();
+  });
+
+  // ---------------- Add item ----------------
+
+  document.getElementById('addItemBtn').addEventListener('click', () => {
+    document.getElementById('newItemName').value = '';
+    document.getElementById('newItemSubcategory').value = '';
+    document.getElementById('newItemCurrent').value = '';
+    document.getElementById('newItemPar').value = '';
+    document.getElementById('newItemLocation').value = '';
+    document.getElementById('newItemReorderUrl').value = '';
+    updateNewItemSubcategorySuggestions();
+    document.getElementById('addItemOverlay').classList.add('visible');
+  });
+  document.getElementById('cancelAddItem').addEventListener('click', () => {
+    document.getElementById('addItemOverlay').classList.remove('visible');
+  });
+  document.getElementById('confirmAddItem').addEventListener('click', async () => {
+    const name = document.getElementById('newItemName').value.trim();
+    const category = document.getElementById('newItemCategory').value;
+    const subcategory = document.getElementById('newItemSubcategory').value.trim();
+    const unitType = document.getElementById('newItemUnitType').value;
+    const current = document.getElementById('newItemCurrent').value.trim();
+    const parRaw = document.getElementById('newItemPar').value.trim();
+    const parLevel = parRaw === '' ? null : parseFloat(parRaw);
+    const location = document.getElementById('newItemLocation').value.trim();
+    const reorderUrl = document.getElementById('newItemReorderUrl').value.trim();
+
+    if (!name) { showToast('Enter a name for the item.', true); return; }
+
+    const { data, error } = await supabaseClient.from('inventory_items').insert({
+      name, category, subcategory: subcategory || null, unit_type: unitType, current_value: current || null,
+      par_level: isNaN(parLevel) ? null : parLevel, status: 'active',
+      location: location || null, reorder_url: reorderUrl || null,
+    }).select();
+
+    if (error) { showToast('Could not add item: ' + error.message, true); return; }
+
+    allItems.push(data[0]);
+    document.getElementById('addItemOverlay').classList.remove('visible');
+    showToast('Item added.');
+    renderStats(); render(); renderSidebar();
+    if (currentTab === 'schedule') renderSchedule();
+  });
+
+  // ---------------- Search / show retired / expand all ----------------
+
+  let allExpanded = false;
+  toggleAllBtn.addEventListener('click', () => {
+    allExpanded = !allExpanded;
+    const categories = new Set(activeItems().map(i => i.category));
+    categories.forEach(cat => { expandedState[cat] = allExpanded; });
+    toggleAllBtn.textContent = allExpanded ? 'Collapse all' : 'Expand all';
+    render();
+  });
+
+  searchInput.addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); render(); });
+  showRetiredCheckbox.addEventListener('change', (e) => { showRetired = e.target.checked; render(); });
+  document.getElementById('exportAllBtn').addEventListener('click', () => exportAllToExcel());
+</script>
+
+</body>
+</html>
