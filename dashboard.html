@@ -257,6 +257,17 @@
   .icon-btn-link { background: rgba(201,134,43,0.15); color: var(--amber); }
   .icon-btn-link:hover { background: var(--amber); color: white; }
 
+  .btn-vendor-link {
+    background: var(--amber); color: white; border: none;
+    padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 7px;
+    box-shadow: 0 2px 5px rgba(201,134,43,0.35);
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .btn-vendor-link:hover { background: #A8701F; transform: translateY(-1px); }
+  .btn-vendor-link i { font-size: 15px; }
+
   .current-cell { display: flex; align-items: center; gap: 7px; }
 
   .edit-input-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -951,16 +962,16 @@
         const groupSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
         const vendorUrl = groupSchedule ? groupSchedule.vendor_url : null;
         const vendorLinkIcon = vendorUrl
-          ? `<a href="${escapeAttr(vendorUrl)}" target="_blank" rel="noopener" class="icon-btn icon-btn-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+          ? `<a href="${escapeAttr(vendorUrl)}" target="_blank" rel="noopener" class="btn-vendor-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i>Vendor</a>`
           : '';
         const setVendorLinkBtn = currentUserRole === 'admin'
           ? `<button class="icon-btn icon-btn-link" data-edit-vendor-link-btn="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="${vendorUrl ? 'Change vendor link' : 'Set vendor link'}"><i class="ti ti-link"></i></button>`
           : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
           <td colspan="9">
-            <div class="subcat-heading-line">
+            <div class="subcat-heading-line" style="flex-wrap:wrap; row-gap:8px;">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
-              <div style="display:flex; gap:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
                 ${vendorLinkIcon}
                 ${setVendorLinkBtn}
                 ${currentUserRole === 'admin' ? `<button class="icon-btn" data-edit-group-subcat="${escapeAttr(category)}|||${escapeAttr(subcatName)}" title="Edit this subcategory"><i class="ti ti-edit"></i></button>` : ''}
@@ -1259,9 +1270,22 @@
     const input = document.getElementById(`vendorLinkInput_${uid}`);
     const newVendorUrl = input.value.trim();
 
+    // subcategory_schedules requires reorder_frequency on every row. If this
+    // group already has a schedule row (usually created the first time the
+    // Reorder Schedule tab was opened), the upsert only needs to touch
+    // vendor_url. If it doesn't exist yet — e.g. this link is being set from
+    // Browse Inventory before Reorder Schedule was ever visited — fall back
+    // to the same category default used elsewhere, so the insert has a
+    // valid value instead of leaving that required column empty.
+    const existingSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+    const payload = { category, subcategory: subcatName, vendor_url: newVendorUrl || null };
+    if (!existingSchedule) {
+      payload.reorder_frequency = CATEGORY_DEFAULT_FREQUENCY[category] || 'monthly';
+    }
+
     const { data: scheduleData, error } = await supabaseClient
       .from('subcategory_schedules')
-      .upsert([{ category, subcategory: subcatName, vendor_url: newVendorUrl || null }], { onConflict: 'category,subcategory' })
+      .upsert([payload], { onConflict: 'category,subcategory' })
       .select();
 
     if (error) { showToast('Could not save link: ' + error.message, true); return; }
@@ -1684,7 +1708,7 @@
       const lowInGroup = g.items.filter(needsReorder).length;
       const groupSchedule = allSchedules.find(s => s.category === g.category && s.subcategory === g.subcategory);
       const groupVendorLinkIcon = groupSchedule && groupSchedule.vendor_url
-        ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="icon-btn icon-btn-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i></a>`
+        ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="btn-vendor-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i>Vendor</a>`
         : '';
 
       const itemRows = g.items.map(item => {
@@ -1714,18 +1738,20 @@
       }).join('');
 
       return `<div class="schedule-item-block">
-        <div class="schedule-item">
+        <div class="schedule-item" style="flex-wrap:wrap; row-gap:8px;">
           <button class="schedule-item-toggle" data-toggle-schedule-group="${escapeAttr(key)}">
             <i class="ti ti-chevron-right schedule-chevron ${isOpen ? 'rotated' : ''}"></i>
             <span class="schedule-item-name">${g.subcategory}</span>
             ${lowInGroup > 0 ? `<span class="schedule-low-badge">${lowInGroup}</span>` : ''}
           </button>
-          <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
-            <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
-            <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
-            <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
-          </select>
-          ${groupVendorLinkIcon}
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select class="freq-select" data-group-reassign="${escapeAttr(g.category)}|||${escapeAttr(g.subcategory)}">
+              <option value="weekly" ${buckets.weekly.includes(g) ? 'selected' : ''}>Weekly</option>
+              <option value="biweekly" ${buckets.biweekly.includes(g) ? 'selected' : ''}>Biweekly</option>
+              <option value="monthly" ${buckets.monthly.includes(g) ? 'selected' : ''}>Monthly</option>
+            </select>
+            ${groupVendorLinkIcon}
+          </div>
         </div>
         ${isOpen ? `<div class="schedule-subitems">${itemRows}</div>` : ''}
       </div>`;
