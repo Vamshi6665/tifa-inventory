@@ -40,6 +40,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .brand { display: flex; align-items: center; gap: 10px; }
@@ -66,6 +68,11 @@
     .layout { grid-template-columns: 1fr; }
     .sidebar { position: static !important; order: -1; }
   }
+  @media (max-width: 480px) {
+    header { padding: 14px 16px; }
+    .layout { padding: 18px 12px 60px; }
+    .page-title { font-size: 23px; }
+  }
 
   .page-top {
     display: flex; justify-content: space-between; align-items: flex-end;
@@ -74,7 +81,7 @@
   .page-title { font-family: 'Playfair Display', serif; font-size: 27px; margin: 0 0 4px; }
   .page-subtitle { color: var(--muted); font-size: 13.5px; margin: 0; }
 
-  .top-actions { display: flex; gap: 8px; }
+  .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .btn {
     background: white; border: 1px solid var(--border); color: var(--pistachio-deep);
     padding: 8px 14px; border-radius: 7px; font-family: 'DM Sans', sans-serif;
@@ -84,7 +91,7 @@
   .btn-primary { background: var(--pistachio-dark); color: white; border-color: var(--pistachio-dark); box-shadow: 0 1px 3px rgba(63,82,34,0.25); }
   .btn-primary:hover { background: var(--pistachio-deep); }
 
-  .tab-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tab-row { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
   .tab-btn {
     background: white; border: 1px solid var(--border); color: var(--muted);
     padding: 9px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif;
@@ -142,13 +149,13 @@
   .bulk-bar .bulk-clear { background: rgba(255,255,255,0.15); color: white; }
   .bulk-bar .bulk-clear:hover { background: rgba(255,255,255,0.25); }
 
-  .search-row { margin-bottom: 18px; position: relative; display: flex; gap: 10px; align-items: center; }
+  .search-row { margin-bottom: 18px; position: relative; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .search-row input[type=text] {
     flex: 1; padding: 11px 14px 11px 38px; border: 1.5px solid var(--border);
     border-radius: 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; background: white;
   }
   .search-row input:focus { outline: none; border-color: var(--pistachio); }
-  .search-wrap { position: relative; flex: 1; }
+  .search-wrap { position: relative; flex: 1; min-width: 200px; }
   .search-icon {
     position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
     font-size: 16px; color: var(--muted); pointer-events: none;
@@ -198,10 +205,10 @@
   .health-bar .ok-seg { background: var(--pistachio); }
   .health-bar .low-seg { background: #D85A30; }
 
-  .category-table-wrap { display: none; border-top: 1px solid var(--border); }
+  .category-table-wrap { display: none; border-top: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .category-card.expanded .category-table-wrap { display: block; }
 
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; min-width: 680px; border-collapse: collapse; }
   th, td { text-align: left; padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   th {
     font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase;
@@ -218,7 +225,7 @@
     padding: 7px 16px;
   }
   tr.subcategory-header-row:hover td { background: #E4F3D4; }
-  .subcat-heading-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .subcat-heading-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
   .subcat-heading-line .icon-btn { padding: 2px 6px; font-size: 10.5px; }
 
   .subcat-edit-input-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
@@ -317,6 +324,7 @@
   .schedule-item {
     padding: 9px 16px; display: flex;
     justify-content: space-between; align-items: center; gap: 8px;
+    flex-wrap: wrap; row-gap: 8px;
   }
   .schedule-item-toggle {
     background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 7px;
@@ -772,7 +780,7 @@
     renderStats();
     render();
     renderSidebar();
-    maybeShowAlert();
+    if (currentUserRole === 'admin') { maybeShowAlert(); }
   }
 
   function populateCategoryDropdown() {
@@ -966,7 +974,7 @@
           : '';
         html += `<tr class="subcategory-header-row" data-subcat-heading="${escapeAttr(category)}|||${escapeAttr(subcatName)}">
           <td colspan="8">
-            <div class="subcat-heading-line" style="flex-wrap:wrap; row-gap:8px;">
+            <div class="subcat-heading-line">
               <span class="subcat-heading-text">${subcatName}${repUnitLabel ? ` — ${escapeAttr(repUnitLabel)}` : ''}</span>
               <div style="display:flex; align-items:center; gap:8px;">
                 ${vendorLinkIcon}
@@ -1775,7 +1783,7 @@
       }).join('');
 
       return `<div class="schedule-item-block">
-        <div class="schedule-item" style="flex-wrap:wrap; row-gap:8px;">
+        <div class="schedule-item">
           <button class="schedule-item-toggle" data-toggle-schedule-group="${escapeAttr(key)}">
             <i class="ti ti-chevron-right schedule-chevron ${isOpen ? 'rotated' : ''}"></i>
             <span class="schedule-item-name">${g.subcategory}</span>
