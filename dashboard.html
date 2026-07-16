@@ -2167,21 +2167,31 @@
     return weeks;
   }
 
-  // Fetched once per session — inventory_counts is small enough at this
-  // business's current scale to pull in full and do the pivoting in the
-  // browser, same approach as the rest of the app. Revisit with a bounded,
-  // date-filtered fetch if this table grows large enough to feel slow.
+  // Fetched once per session. Supabase caps any single request at 1000 rows
+  // by default, silently — with the historical backfill plus everything
+  // logged from live use, inventory_counts is now well past that, so this
+  // has to page through in batches rather than trust one plain .select().
   async function loadTrendCountsIfNeeded() {
     if (trendsDataLoaded) return true;
-    const { data, error } = await supabaseClient
-      .from('inventory_counts')
-      .select('item_id, recorded_value, recorded_at')
-      .order('recorded_at', { ascending: true });
-    if (error) {
-      trendsContent.innerHTML = `<div class="empty-state"><h2>Couldn't load trend data</h2><p>${error.message}</p></div>`;
-      return false;
+    const pageSize = 1000;
+    let allRows = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabaseClient
+        .from('inventory_counts')
+        .select('item_id, recorded_value, recorded_at')
+        .order('recorded_at', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        trendsContent.innerHTML = `<div class="empty-state"><h2>Couldn't load trend data</h2><p>${error.message}</p></div>`;
+        return false;
+      }
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) break;
+      offset += pageSize;
     }
-    allCountsFull = data || [];
+    allCountsFull = allRows;
     trendsDataLoaded = true;
     return true;
   }
