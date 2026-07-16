@@ -541,6 +541,7 @@
     <div class="tab-row">
       <button class="tab-btn active" id="tabBrowseBtn">Browse inventory</button>
       <button class="tab-btn" id="tabScheduleBtn">Reorder schedule</button>
+      <button class="tab-btn" id="tabTrendsBtn">Trends</button>
       <button class="tab-btn" id="tabManageBtn" style="display:none;">Manage access</button>
     </div>
 
@@ -574,6 +575,20 @@
     </div>
 
     <div id="scheduleView" style="display:none;"></div>
+    <div id="trendsView" style="display:none;">
+      <div class="search-row">
+        <div class="search-wrap">
+          <i class="ti ti-search search-icon"></i>
+          <input type="text" id="trendSearchInput" placeholder="Search items by name…" />
+        </div>
+        <select id="trendRangeSelect" class="status-select">
+          <option value="8">Last 8 weeks</option>
+          <option value="12">Last 12 weeks</option>
+          <option value="26">Last 6 months</option>
+        </select>
+      </div>
+      <div id="trendsContent"></div>
+    </div>
     <div id="manageView" style="display:none;"></div>
   </div>
 
@@ -683,6 +698,9 @@
   const showRetiredCheckbox = document.getElementById('showRetiredCheckbox');
   const tabBrowseBtn = document.getElementById('tabBrowseBtn');
   const tabScheduleBtn = document.getElementById('tabScheduleBtn');
+  const trendsView = document.getElementById('trendsView');
+  const trendsContent = document.getElementById('trendsContent');
+  const tabTrendsBtn = document.getElementById('tabTrendsBtn');
   const manageView = document.getElementById('manageView');
   const tabManageBtn = document.getElementById('tabManageBtn');
   const roleBadge = document.getElementById('roleBadge');
@@ -690,6 +708,11 @@
   let currentUserId = null;
   let currentUserRole = null;
   let sidebarExpandedState = {};
+  let allCountsFull = [];
+  let trendsDataLoaded = false;
+  let trendWeekCount = 8;
+  let trendSearchTerm = '';
+  let trendExpandedState = {};
   let allItems = [];
   let allCounts = [];
   let allSchedules = [];
@@ -2113,15 +2136,178 @@
     });
   }
 
+  // ---------------- Trends tab ----------------
+
+  // Monday-start week, matching the calendar-week approach agreed on.
+  function getWeekStart(dateInput) {
+    const d = new Date(dateInput);
+    const day = d.getDay(); // 0=Sun ... 6=Sat
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function formatWeekLabel(weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const startStr = weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const endStr = weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${startStr}–${endStr}`;
+  }
+
+  function buildWeekColumns(numWeeks) {
+    const thisWeekStart = getWeekStart(new Date());
+    const weeks = [];
+    for (let i = numWeeks - 1; i >= 0; i--) {
+      const ws = new Date(thisWeekStart);
+      ws.setDate(ws.getDate() - i * 7);
+      weeks.push(ws);
+    }
+    return weeks;
+  }
+
+  // Fetched once per session — inventory_counts is small enough at this
+  // business's current scale to pull in full and do the pivoting in the
+  // browser, same approach as the rest of the app. Revisit with a bounded,
+  // date-filtered fetch if this table grows large enough to feel slow.
+  async function loadTrendCountsIfNeeded() {
+    if (trendsDataLoaded) return true;
+    const { data, error } = await supabaseClient
+      .from('inventory_counts')
+      .select('item_id, recorded_value, recorded_at')
+      .order('recorded_at', { ascending: true });
+    if (error) {
+      trendsContent.innerHTML = `<div class="empty-state"><h2>Couldn't load trend data</h2><p>${error.message}</p></div>`;
+      return false;
+    }
+    allCountsFull = data || [];
+    trendsDataLoaded = true;
+    return true;
+  }
+
+  // Single pass per item through its own sorted history, carrying the last
+  // known value forward through any week with no update — O(counts + items
+  // × weeks) rather than re-scanning the full history per cell.
+  function buildTrendMatrix(items, weeks) {
+    const countsByItem = {};
+    for (const c of allCountsFull) {
+      const key = String(c.item_id);
+      if (!countsByItem[key]) countsByItem[key] = [];
+      countsByItem[key].push(c);
+    }
+
+    const matrix = {};
+    for (const item of items) {
+      const key = String(item.id);
+      const counts = countsByItem[key] || [];
+      let pointer = 0;
+      let lastKnown = null;
+      const rowValues = [];
+      for (const weekStart of weeks) {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        while (pointer < counts.length && new Date(counts[pointer].recorded_at) < weekEnd) {
+          lastKnown = counts[pointer].recorded_value;
+          pointer++;
+        }
+        rowValues.push(lastKnown);
+      }
+      matrix[key] = rowValues;
+    }
+    return matrix;
+  }
+
+  // Called once when the Trends tab is first opened — loads data, then
+  // hands off to renderTrendsContent() for the actual grid.
+  async function renderTrends() {
+    trendsContent.innerHTML = `<div class="empty-state"><h2>Loading…</h2></div>`;
+    const ok = await loadTrendCountsIfNeeded();
+    if (ok) renderTrendsContent();
+  }
+
+  // Rebuilds only the grid itself — called on search/range/category-toggle
+  // changes, leaving the search box and range selector untouched so typing
+  // doesn't lose focus on every keystroke.
+  function renderTrendsContent() {
+    const weeks = buildWeekColumns(trendWeekCount);
+    const items = activeItems();
+    const matrix = buildTrendMatrix(items, weeks);
+
+    const grouped = {};
+    for (const item of items) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    let html = '';
+    for (const category of Object.keys(grouped)) {
+      const catItems = grouped[category].filter(i => !trendSearchTerm || i.name.toLowerCase().includes(trendSearchTerm));
+      if (catItems.length === 0) continue;
+
+      const isExpanded = !!trendExpandedState[category] || trendSearchTerm.length > 0;
+
+      html += `<div class="category-card ${isExpanded ? 'expanded' : ''}">
+        <div class="category-card-top">
+          <button class="category-toggle" data-toggle-trend-category="${escapeAttr(category)}">
+            <div class="category-toggle-top">
+              <div class="category-toggle-left">
+                <i class="ti ${iconFor(category)} category-icon" aria-hidden="true"></i>
+                <span class="category-name">${category}</span>
+              </div>
+              <i class="ti ti-chevron-right chevron" aria-hidden="true"></i>
+            </div>
+            <div class="category-meta">${catItems.length} item${catItems.length === 1 ? '' : 's'}</div>
+          </button>
+        </div>
+        <div class="category-table-wrap">
+          <table>
+            <thead><tr><th>Item</th>${weeks.map(w => `<th>${formatWeekLabel(w)}</th>`).join('')}</tr></thead>
+            <tbody>`;
+
+      const subgroups = groupBySubcategory(catItems);
+      for (const [subcatName, subItems] of subgroups) {
+        html += `<tr class="subcategory-header-row"><td colspan="${weeks.length + 1}">${subcatName}</td></tr>`;
+        for (const item of subItems) {
+          const values = matrix[String(item.id)] || [];
+          html += `<tr><td>${item.name}</td>${values.map(v => `<td>${v ?? '—'}</td>`).join('')}</tr>`;
+        }
+      }
+
+      html += `</tbody></table></div></div>`;
+    }
+
+    trendsContent.innerHTML = html || `<div class="empty-state"><h2>No items match</h2></div>`;
+
+    trendsContent.querySelectorAll('[data-toggle-trend-category]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.getAttribute('data-toggle-trend-category');
+        trendExpandedState[cat] = !trendExpandedState[cat];
+        renderTrendsContent();
+      });
+    });
+  }
+
+  document.getElementById('trendSearchInput').addEventListener('input', (e) => {
+    trendSearchTerm = e.target.value.trim().toLowerCase();
+    if (trendsDataLoaded) renderTrendsContent();
+  });
+  document.getElementById('trendRangeSelect').addEventListener('change', (e) => {
+    trendWeekCount = parseInt(e.target.value, 10);
+    if (trendsDataLoaded) renderTrendsContent();
+  });
+
   // ---------------- Tabs ----------------
 
   tabBrowseBtn.addEventListener('click', () => {
     currentTab = 'browse';
     tabBrowseBtn.classList.add('active');
     tabScheduleBtn.classList.remove('active');
+    tabTrendsBtn.classList.remove('active');
     tabManageBtn.classList.remove('active');
     browseView.style.display = 'block';
     scheduleView.style.display = 'none';
+    trendsView.style.display = 'none';
     manageView.style.display = 'none';
   });
 
@@ -2129,11 +2315,26 @@
     currentTab = 'schedule';
     tabScheduleBtn.classList.add('active');
     tabBrowseBtn.classList.remove('active');
+    tabTrendsBtn.classList.remove('active');
     tabManageBtn.classList.remove('active');
     browseView.style.display = 'none';
     scheduleView.style.display = 'block';
+    trendsView.style.display = 'none';
     manageView.style.display = 'none';
     renderSchedule();
+  });
+
+  tabTrendsBtn.addEventListener('click', () => {
+    currentTab = 'trends';
+    tabTrendsBtn.classList.add('active');
+    tabBrowseBtn.classList.remove('active');
+    tabScheduleBtn.classList.remove('active');
+    tabManageBtn.classList.remove('active');
+    browseView.style.display = 'none';
+    scheduleView.style.display = 'none';
+    trendsView.style.display = 'block';
+    manageView.style.display = 'none';
+    renderTrends();
   });
 
   tabManageBtn.addEventListener('click', () => {
@@ -2141,8 +2342,10 @@
     tabManageBtn.classList.add('active');
     tabBrowseBtn.classList.remove('active');
     tabScheduleBtn.classList.remove('active');
+    tabTrendsBtn.classList.remove('active');
     browseView.style.display = 'none';
     scheduleView.style.display = 'none';
+    trendsView.style.display = 'none';
     manageView.style.display = 'block';
     renderManageAccess();
   });
