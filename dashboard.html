@@ -691,7 +691,8 @@
     </div>
     <div class="modal-body">
       <canvas id="chartModalCanvas" height="220"></canvas>
-      <p id="chartModalNote" style="font-size:12px; color: var(--muted); margin-top:14px;"></p>
+      <div id="chartModalInsight" style="display:none; margin-top:14px; padding:12px 14px; background: var(--pistachio-tint); border-radius: 8px; font-size: 13px; color: var(--pistachio-deep); font-weight:600;"></div>
+      <p id="chartModalNote" style="font-size:12px; color: var(--muted); margin-top:10px;"></p>
     </div>
     <div class="modal-footer">
       <button class="primary-action" id="closeChartModal" style="flex:1;">Close</button>
@@ -2380,6 +2381,77 @@
     });
   }
 
+  // How many days worth of buffer to size a reorder suggestion around,
+  // based on how often that item's subcategory actually gets reordered.
+  const FREQUENCY_BUFFER_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
+
+  // Looks at an item's real history, keeps only the periods where stock
+  // went DOWN (consumption), and explicitly ignores periods where it went
+  // up (a restock, not usage — averaging that in would corrupt the rate).
+  // Returns units consumed per day, or null if there's not enough signal.
+  function computeConsumptionRate(itemId) {
+    const counts = allCountsFull
+      .filter(c => String(c.item_id) === String(itemId))
+      .map(c => ({ date: new Date(c.recorded_at), value: parseValue(c.recorded_value) }))
+      .filter(pt => pt.value !== null && !isNaN(pt.date.getTime()))
+      .sort((a, b) => a.date - b.date);
+
+    if (counts.length < 2) return null;
+
+    // Prefer a recent window (last 8 weeks) so an old pattern from months
+    // ago doesn't skew today's estimate; fall back to the last few points
+    // on record if the recent window is too sparse to say anything.
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 56);
+    const recentEnough = counts.filter(pt => pt.date >= cutoff);
+    const relevant = recentEnough.length >= 2 ? recentEnough : counts.slice(-6);
+
+    let totalConsumed = 0;
+    let totalDays = 0;
+    for (let i = 1; i < relevant.length; i++) {
+      const prev = relevant[i - 1];
+      const curr = relevant[i];
+      const days = (curr.date - prev.date) / 86400000;
+      if (days <= 0) continue;
+      if (curr.value < prev.value) {
+        totalConsumed += (prev.value - curr.value);
+        totalDays += days;
+      }
+    }
+
+    if (totalDays === 0 || totalConsumed <= 0) return null; // only restocks seen, or no history to compare
+    return totalConsumed / totalDays;
+  }
+
+  // Turns a consumption rate into the three numbers that actually matter:
+  // how fast it's moving per week, how many days until it crosses
+  // threshold, and how much to order to clear that threshold with a
+  // buffer matching how often this item is actually reordered.
+  function buildReorderInsight(item) {
+    const dailyRate = computeConsumptionRate(item.id);
+    if (dailyRate === null) return null;
+
+    const current = parseValue(item.current_value);
+    if (current === null) return null;
+
+    const threshold = item.par_level;
+    const weeklyRate = dailyRate * 7;
+
+    let daysUntilThreshold = null;
+    let suggestedQty = null;
+    if (threshold !== null && threshold !== undefined) {
+      daysUntilThreshold = current <= threshold ? 0 : Math.round((current - threshold) / dailyRate);
+
+      const schedule = allSchedules.find(s => s.category === item.category && s.subcategory === (item.subcategory || 'Uncategorized'));
+      const freq = schedule ? schedule.reorder_frequency : (CATEGORY_DEFAULT_FREQUENCY[item.category] || 'monthly');
+      const bufferDays = FREQUENCY_BUFFER_DAYS[freq] || 30;
+      const targetLevel = threshold + dailyRate * bufferDays;
+      suggestedQty = Math.max(0, Math.ceil(targetLevel - current));
+    }
+
+    return { weeklyRate, daysUntilThreshold, suggestedQty };
+  }
+
   function openDetailChart(itemId, weeks) {
     const item = allItems.find(i => String(i.id) === String(itemId));
     if (!item) return;
@@ -2392,13 +2464,33 @@
     document.getElementById('chartModalTitle').textContent = item.name;
     document.getElementById('chartModalSubtitle').textContent = `${item.category}${item.subcategory ? ' · ' + item.subcategory : ''}`;
 
+    const insightEl = document.getElementById('chartModalInsight');
+    const insight = hasNumericData ? buildReorderInsight(item) : null;
+    if (insight) {
+      const parts = [`Using about ${insight.weeklyRate.toFixed(1)} units/week`];
+      if (insight.daysUntilThreshold !== null) {
+        parts.push(insight.daysUntilThreshold <= 0
+          ? 'already at or below threshold'
+          : `projected to hit threshold in ~${insight.daysUntilThreshold} day${insight.daysUntilThreshold === 1 ? '' : 's'}`);
+      }
+      if (insight.suggestedQty !== null && insight.suggestedQty > 0) {
+        parts.push(`suggest ordering ~${insight.suggestedQty} unit${insight.suggestedQty === 1 ? '' : 's'}`);
+      }
+      insightEl.textContent = parts.join(' — ');
+      insightEl.style.display = 'block';
+    } else {
+      insightEl.style.display = 'none';
+    }
+
     const noteEl = document.getElementById('chartModalNote');
     if (!hasNumericData) {
       noteEl.textContent = 'Not enough numeric history to chart yet — this item may be tracked with freeform notes rather than plain numbers.';
+    } else if (!insight) {
+      noteEl.textContent = 'Not enough recent consumption history yet for a reorder estimate — needs at least a couple of recorded decreases.';
     } else {
       noteEl.textContent = item.par_level != null
         ? `Dashed line shows the reorder threshold (${item.par_level}).`
-        : 'No reorder threshold set for this item.';
+        : 'No reorder threshold set for this item, so no threshold projection is shown.';
     }
 
     if (detailChart) { detailChart.destroy(); detailChart = null; }
