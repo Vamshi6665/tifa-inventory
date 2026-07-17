@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --pistachio: #97D66E;
@@ -276,6 +277,12 @@
   }
   .btn-vendor-link:hover { background: #A8701F; transform: translateY(-1px); }
   .btn-vendor-link i { font-size: 17px; }
+
+  .sparkline-cell {
+    width: 90px; height: 32px; cursor: pointer; border-radius: 6px;
+    transition: background 0.12s ease;
+  }
+  .sparkline-cell:hover { background: var(--pistachio-tint); }
 
   .reorder-day-badge {
     font-size: 12px; font-weight: 700; background: var(--pistachio-tint); color: var(--pistachio-dark);
@@ -672,6 +679,22 @@
     <div class="modal-footer">
       <button class="secondary-action" id="cancelDeleteItem">Cancel</button>
       <button class="primary-action danger" id="confirmDeleteItem">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="chartOverlay">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h2 id="chartModalTitle">Trend</h2>
+      <p id="chartModalSubtitle"></p>
+    </div>
+    <div class="modal-body">
+      <canvas id="chartModalCanvas" height="220"></canvas>
+      <p id="chartModalNote" style="font-size:12px; color: var(--muted); margin-top:14px;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="primary-action" id="closeChartModal" style="flex:1;">Close</button>
     </div>
   </div>
 </div>
@@ -2272,15 +2295,19 @@
         </div>
         <div class="category-table-wrap">
           <table>
-            <thead><tr><th>Item</th>${weeks.map(w => `<th>${formatWeekLabel(w)}</th>`).join('')}</tr></thead>
+            <thead><tr><th>Item</th><th>Trend</th>${weeks.map(w => `<th>${formatWeekLabel(w)}</th>`).join('')}</tr></thead>
             <tbody>`;
 
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
-        html += `<tr class="subcategory-header-row"><td colspan="${weeks.length + 1}">${subcatName}</td></tr>`;
+        html += `<tr class="subcategory-header-row"><td colspan="${weeks.length + 2}">${subcatName}</td></tr>`;
         for (const item of subItems) {
           const values = matrix[String(item.id)] || [];
-          html += `<tr><td>${item.name}</td>${values.map(v => `<td>${v ?? '—'}</td>`).join('')}</tr>`;
+          html += `<tr>
+            <td>${item.name}</td>
+            <td><canvas class="sparkline-cell" data-sparkline-item="${item.id}" title="Click for detailed chart"></canvas></td>
+            ${values.map(v => `<td>${v ?? '—'}</td>`).join('')}
+          </tr>`;
         }
       }
 
@@ -2288,6 +2315,7 @@
     }
 
     trendsContent.innerHTML = html || `<div class="empty-state"><h2>No items match</h2></div>`;
+    renderSparklines(matrix, weeks);
 
     trendsContent.querySelectorAll('[data-toggle-trend-category]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2297,6 +2325,117 @@
       });
     });
   }
+
+  // Chart.js instances are tracked so they can be explicitly destroyed
+  // before re-rendering — reusing a canvas without destroying the old
+  // chart first leaks memory and can throw on re-render.
+  let sparklineCharts = {};
+  let detailChart = null;
+
+  function renderSparklines(matrix, weeks) {
+    Object.values(sparklineCharts).forEach(c => c.destroy());
+    sparklineCharts = {};
+
+    trendsContent.querySelectorAll('[data-sparkline-item]').forEach(canvas => {
+      const card = canvas.closest('.category-card');
+      if (!card || !card.classList.contains('expanded')) return; // collapsed -> invisible, skip
+
+      const itemId = canvas.getAttribute('data-sparkline-item');
+      const rawValues = matrix[itemId] || [];
+      const numericValues = rawValues.map(v => (v === null ? null : parseValue(v)));
+      if (!numericValues.some(v => v !== null)) return; // nothing numeric to plot
+
+      const chart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: weeks.map(w => formatWeekLabel(w)),
+          datasets: [{
+            data: numericValues,
+            borderColor: '#5CAF3B',
+            backgroundColor: 'rgba(151,214,110,0.15)',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.2,
+            spanGaps: true,
+          }],
+        },
+        options: {
+          responsive: false,
+          animation: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: { x: { display: false }, y: { display: false } },
+        },
+      });
+      sparklineCharts[itemId] = chart;
+      canvas.addEventListener('click', () => openDetailChart(itemId, weeks));
+    });
+  }
+
+  function openDetailChart(itemId, weeks) {
+    const item = allItems.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+
+    const matrix = buildTrendMatrix([item], weeks);
+    const rawValues = matrix[String(item.id)] || [];
+    const numericValues = rawValues.map(v => (v === null ? null : parseValue(v)));
+    const hasNumericData = numericValues.some(v => v !== null);
+
+    document.getElementById('chartModalTitle').textContent = item.name;
+    document.getElementById('chartModalSubtitle').textContent = `${item.category}${item.subcategory ? ' · ' + item.subcategory : ''}`;
+
+    const noteEl = document.getElementById('chartModalNote');
+    if (!hasNumericData) {
+      noteEl.textContent = 'Not enough numeric history to chart yet — this item may be tracked with freeform notes rather than plain numbers.';
+    } else {
+      noteEl.textContent = item.par_level != null
+        ? `Dashed line shows the reorder threshold (${item.par_level}).`
+        : 'No reorder threshold set for this item.';
+    }
+
+    if (detailChart) { detailChart.destroy(); detailChart = null; }
+
+    if (hasNumericData) {
+      const datasets = [{
+        label: item.name,
+        data: numericValues,
+        borderColor: '#5CAF3B',
+        backgroundColor: 'rgba(151,214,110,0.15)',
+        borderWidth: 2,
+        pointRadius: 3,
+        fill: true,
+        tension: 0.2,
+        spanGaps: true,
+      }];
+      if (item.par_level != null) {
+        datasets.push({
+          label: 'Threshold',
+          data: weeks.map(() => item.par_level),
+          borderColor: '#C0392B',
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+        });
+      }
+      detailChart = new Chart(document.getElementById('chartModalCanvas'), {
+        type: 'line',
+        data: { labels: weeks.map(w => formatWeekLabel(w)), datasets },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: item.par_level != null } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    document.getElementById('chartOverlay').classList.add('visible');
+  }
+
+  document.getElementById('closeChartModal').addEventListener('click', () => {
+    document.getElementById('chartOverlay').classList.remove('visible');
+    if (detailChart) { detailChart.destroy(); detailChart = null; }
+  });
 
   document.getElementById('trendSearchInput').addEventListener('input', (e) => {
     trendSearchTerm = e.target.value.trim().toLowerCase();
