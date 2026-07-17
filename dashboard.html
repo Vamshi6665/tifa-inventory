@@ -2246,6 +2246,14 @@
         }
         rowValues.push(lastKnown);
       }
+      // The last column is always "this week" by construction (see
+      // buildWeekColumns), so it should always match the item's actual
+      // live current_value rather than whatever the cached history fetch
+      // happened to have -- otherwise an edit made after Trends data was
+      // first loaded this session would show as stale until a full reload.
+      if (rowValues.length > 0 && item.current_value != null && item.current_value !== '') {
+        rowValues[rowValues.length - 1] = item.current_value;
+      }
       matrix[key] = rowValues;
     }
     return matrix;
