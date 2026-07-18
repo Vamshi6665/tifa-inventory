@@ -2309,7 +2309,16 @@
 
       const subgroups = groupBySubcategory(catItems);
       for (const [subcatName, subItems] of subgroups) {
-        html += `<tr class="subcategory-header-row"><td colspan="${weeks.length + 2}">${subcatName}</td></tr>`;
+        const groupSchedule = allSchedules.find(s => s.category === category && s.subcategory === subcatName);
+        const vendorLinkIcon = groupSchedule && groupSchedule.vendor_url
+          ? `<a href="${escapeAttr(groupSchedule.vendor_url)}" target="_blank" rel="noopener" class="btn-vendor-link" title="Open vendor link" onclick="event.stopPropagation()"><i class="ti ti-external-link"></i>Vendor</a>`
+          : '';
+        html += `<tr class="subcategory-header-row"><td colspan="${weeks.length + 2}">
+          <div class="subcat-heading-line">
+            <span class="subcat-heading-text">${subcatName}</span>
+            ${vendorLinkIcon}
+          </div>
+        </td></tr>`;
         for (const item of subItems) {
           const values = matrix[String(item.id)] || [];
           html += `<tr>
