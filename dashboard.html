@@ -1162,7 +1162,10 @@
   }
 
   async function autoSaveLocation(itemId, newValue, previousValue) {
-    if (newValue === previousValue) return;
+    if (newValue === previousValue) {
+      showToast(`No change — still ${newValue || '(blank)'}.`);
+      return;
+    }
 
     const { data: updatedRows, error } = await supabaseClient
       .from('inventory_items')
@@ -1540,7 +1543,10 @@
   }
 
   async function autoSaveThreshold(itemId, newValue, previousValue) {
-    if (newValue === previousValue) return;
+    if (newValue === previousValue) {
+      showToast(`No change — still ${newValue || '(none)'}.`);
+      return;
+    }
 
     const parsed = newValue === '' ? null : parseFloat(newValue);
     if (newValue !== '' && isNaN(parsed)) {
@@ -1640,7 +1646,10 @@
   }
 
   async function autoSaveCurrentValue(itemId, newValue, previousValue) {
-    if (newValue === previousValue) return;
+    if (newValue === previousValue) {
+      showToast(`No change — still ${newValue || '(blank)'}.`);
+      return;
+    }
 
     if (newValue === '') {
       // Don't allow clearing the field to blank — just re-render so the
