@@ -202,6 +202,7 @@
   .category-meta .low-count { color: var(--error-deep); font-weight: 600; }
 
   .last-updated { font-size: 12px; color: var(--muted); cursor: default; }
+  .verified-note { font-size: 11px; color: var(--mint-dark); margin-top: 2px; cursor: default; }
 
   .health-bar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--mint-tint); }
   .health-bar .ok-seg { background: var(--mint); }
@@ -1104,7 +1105,12 @@
                 ? `<input type="number" step="any" class="inline-threshold-input" data-threshold-input="${item.id}" value="${item.par_level ?? ''}" placeholder="—" />`
                 : `<span>${item.par_level ?? '—'}</span>`}
             </td>
-            <td><span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span></td>
+            <td>
+              <span class="last-updated" title="${escapeAttr(formatDateFull(item.updated_at))}">${formatDateShort(item.updated_at)}</span>
+              ${item.last_verified_at && item.updated_at && new Date(item.last_verified_at) > new Date(item.updated_at)
+                ? `<div class="verified-note" title="Confirmed still correct on ${escapeAttr(formatDateFull(item.last_verified_at))}, value hasn't changed since it was last set">Checked ${formatDateShort(item.last_verified_at)}</div>`
+                : ''}
+            </td>
             <td>
               ${currentUserRole === 'admin'
                 ? `<input type="text" class="inline-location-input" data-location-input="${item.id}" value="${item.location ? escapeAttr(item.location) : ''}" placeholder="—" />`
@@ -1647,7 +1653,22 @@
 
   async function autoSaveCurrentValue(itemId, newValue, previousValue) {
     if (newValue === previousValue) {
-      showToast(`No change — still ${newValue || '(blank)'}.`);
+      // Nothing changed, but the person did just physically check this
+      // count -- record that as a verification, separate from
+      // updated_at, which must only ever move when the value itself
+      // changes (the reorder-insight math depends on that distinction).
+      const { data: verifiedRows, error: verifyError } = await supabaseClient
+        .from('inventory_items')
+        .update({ last_verified_at: new Date().toISOString() })
+        .eq('id', itemId)
+        .select('last_verified_at');
+      if (!verifyError && verifiedRows && verifiedRows.length > 0) {
+        const item = allItems.find(i => String(i.id) === String(itemId));
+        if (item) item.last_verified_at = verifiedRows[0].last_verified_at;
+      }
+      showToast(`Confirmed — still ${newValue || '(blank)'}.`);
+      renderStats(); render(); renderSidebar();
+      if (currentTab === 'schedule') renderSchedule();
       return;
     }
 
@@ -1662,12 +1683,14 @@
     // .select('updated_at') returns the row as the database now sees it,
     // including the updated_at value set by the existing trigger — used
     // below so "Last Updated" reflects instantly instead of only after a
-    // full page reload.
+    // full page reload. last_verified_at moves together with it here,
+    // since a genuine change is also, definitionally, a verification.
+    const nowIso = new Date().toISOString();
     const { data: updatedRows, error: updateError } = await supabaseClient
       .from('inventory_items')
-      .update({ current_value: newValue })
+      .update({ current_value: newValue, last_verified_at: nowIso })
       .eq('id', itemId)
-      .select('updated_at');
+      .select('updated_at, last_verified_at');
     if (updateError) { showToast('Could not save: ' + updateError.message, true); return; }
     if (!updatedRows || updatedRows.length === 0) {
       showToast('Save did not go through — you may not have permission to edit this item.', true);
@@ -1683,6 +1706,7 @@
     if (item) {
       item.current_value = newValue;
       item.updated_at = updatedRows[0].updated_at;
+      item.last_verified_at = updatedRows[0].last_verified_at;
     }
     allCounts.push({ item_id: itemId, recorded_value: newValue, recorded_at: new Date().toISOString() });
     renderStats(); render(); renderSidebar();
