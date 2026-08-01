@@ -555,7 +555,7 @@
     </div>
 
     <div class="stats-strip" id="statsStrip"></div>
-
+    <div id="expiryBannerMount"></div>
     <div class="filter-banner" id="filterBanner">
       <span id="filterBannerText"></span>
       <button id="clearFilterBtn">Clear filter</button>
@@ -877,6 +877,7 @@
 
     populateCategoryDropdown();
     renderStats();
+    renderExpiryBanner();
     render();
     renderSidebar();
     if (currentUserRole === 'admin') { maybeShowAlert(); }
@@ -899,6 +900,40 @@
   }
 
   document.getElementById('newItemCategory').addEventListener('change', updateNewItemSubcategorySuggestions);
+function renderExpiryBanner() {
+    const mount = document.getElementById('expiryBannerMount');
+    if (!mount) return;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const daysUntil = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr + 'T00:00:00');
+      if (isNaN(d.getTime())) return null;
+      return Math.round((d - today) / 86400000);
+    };
+
+    const flagged = activeItems()
+      .map(i => ({ item: i, d: daysUntil(i.expiry_date) }))
+      .filter(x => x.d !== null && x.d <= 7)
+      .sort((a, b) => a.d - b.d);
+
+    if (flagged.length === 0) { mount.innerHTML = ''; return; }
+
+    const expired = flagged.filter(x => x.d < 0);
+    const soon = flagged.filter(x => x.d >= 0);
+    const parts = [];
+    if (expired.length) parts.push(`<strong>${expired.length}</strong> expired`);
+    if (soon.length) parts.push(`<strong>${soon.length}</strong> expiring within 7 days`);
+    const names = flagged.slice(0, 5).map(x => x.item.name).join(', ');
+
+    mount.innerHTML = `
+      <div style="border-left:4px solid var(--error); background:#F2E9E9; color:var(--forest);
+        padding:11px 15px; border-radius:9px; margin-bottom:14px; font-size:13px;
+        display:flex; align-items:center; gap:8px;">
+        <i class="ti ti-alert-triangle" style="color:var(--error); font-size:17px;"></i>
+        <span>${parts.join(' · ')} — ${names}${flagged.length > 5 ? `, +${flagged.length - 5} more` : ''}</span>
+      </div>`;
+  }
 
   function renderStats() {
     const items = activeItems();
