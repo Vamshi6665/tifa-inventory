@@ -52,7 +52,7 @@ Do these together, because v1's inline edits by employees stop working once the 
 
 | Setting | Where | Notes |
 |---|---|---|
-| Framework preset: **Vite** (build `npm run build`, output `dist`) | Vercel → Settings → Build and Deployment | v1 deployed static files with no build step |
+| Build: Vite, `npm run build`, output `dist` | `vercel.json` (committed) | Overrides the project's old static-site settings; nothing to change in Vercel |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | `.env.production` (committed) | Public by design, the same values v1 had in its HTML. Vercel variables override them |
 | `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Vercel, Production (and Preview if wanted) | Server only, for `/api/assistant`. Without them the assistant answers from local rules |
 | `ASSISTANT_MODEL` | Vercel, optional | Defaults to `claude-haiku-5-5` |

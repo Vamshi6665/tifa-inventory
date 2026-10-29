@@ -8,7 +8,7 @@ Status: ✅ done and verified · 🟡 done, needs a step in your environment · 
 - ✅ Migration and permission rules tested against a reconstruction of the v1 database in real Postgres (PGlite)
 - ✅ Quantity rules tested against the shop's 1,721 real count values
 - ✅ CI workflow: typecheck, lint, contrast, tests with coverage, bundle budget, E2E
-- 🟡 CI runs on GitHub for the pull request (workflow file is in place)
+- ✅ Branch pushed and pull request opened; CI runs on GitHub
 - ⬜ Firefox and WebKit E2E runs
 
 ## Data and migration
@@ -35,7 +35,8 @@ Status: ✅ done and verified · 🟡 done, needs a step in your environment · 
 - ⬜ Run the k6 load test against staging
 
 ## Operations
-- 🟡 Switch the Vercel framework preset to Vite; optional assistant variables (MIGRATION.md, Settings)
+- ✅ Vercel build settings in `vercel.json`; pull-request preview builds and deploys
+- 🟡 Optional assistant variables in Vercel (MIGRATION.md, Settings)
 - ✅ Production database settings committed (public values, same as v1); previews use sample data
 - ⬜ Error monitoring (e.g. Sentry) — the route error screen is in place, but errors aren't reported anywhere yet
 - ⬜ Uptime check on the production URL
