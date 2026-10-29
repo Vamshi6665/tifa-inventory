@@ -1,8 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import { usePreferences } from '@/stores/preferences';
+import { useViews } from '@/stores/views';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // Stores live in module memory, so clearing localStorage doesn't reset them.
+  // Without this, a search or filter remembered by one test leaked into the next.
+  useViews.setState(useViews.getInitialState(), true);
+  usePreferences.setState(usePreferences.getInitialState(), true);
+});
 
 // CI runners with coverage on are several times slower than a laptop; the
 // default 1 s wait for async UI made page tests flaky there.
