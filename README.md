@@ -46,7 +46,7 @@ Also: ⌘K command palette, notifications, saved table views, light and dark the
 
 ## Quality
 
-- **252 automated tests:** 222 in Vitest (domain rules, real-data checks, components, pages, the migration and RLS on a reconstruction of the live database) and 30 in Playwright (flows, accessibility in both themes, 10 screen widths, keyboard use, 5,000 items).
+- **271 automated tests:** 241 in Vitest (domain rules, real-data checks, components, pages, running on the existing database, and the migration and RLS on a reconstruction of it) and 30 in Playwright (flows, accessibility in both themes, 10 screen widths, keyboard use, 5,000 items).
 - **Accessibility:** no axe violations on any page in either theme; Lighthouse accessibility 100.
 - **Performance:** Lighthouse 100 on desktop; 174KB of JavaScript on first load.
 
@@ -62,7 +62,7 @@ npm run test:e2e     # Playwright
 
 ## Deploy
 
-Vercel builds every push with `npm run build` (framework preset: Vite, output `dist`). Production uses the Supabase settings in `.env.production`; pull-request previews use sample data. Database changes are in `supabase/migrations/`; see [docs/MIGRATION.md](docs/MIGRATION.md) for the rollout.
+Vercel builds every push with `npm run build` (framework preset: Vite, output `dist`). Production uses the Supabase settings in `.env.production`; pull-request previews use sample data. The app runs on the existing database as it is; purchase orders, suppliers and the activity log switch on once the update in `supabase/migrations/` has been run (see [docs/MIGRATION.md](docs/MIGRATION.md)).
 
 ## Documentation
 

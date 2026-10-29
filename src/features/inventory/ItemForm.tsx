@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Button, Dialog, SelectField, TextArea, TextField } from '@/design-system';
 import { useCreateItem, useSuppliers, useUpdateItems } from '@/data/hooks';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { ITEM_STATUSES, STATUS_LABEL, type InventoryItem } from '@/domain/types';
 import { fieldErrors, itemSchema, type ItemFormValues } from './validation';
 import styles from './Inventory.module.css';
@@ -28,6 +29,7 @@ export function ItemFormDialog({ open, onOpenChange, item, existing = [] }: { op
   const [values, setValues] = useState<ItemFormValues>(item ? fromItem(item) : blank);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const suppliers = useSuppliers();
+  const { can } = useAuth();
   const create = useCreateItem();
   const update = useUpdateItems();
   const categories = useMemo(() => [...new Set(existing.map((i) => i.category))].sort(), [existing]);
@@ -107,7 +109,9 @@ export function ItemFormDialog({ open, onOpenChange, item, existing = [] }: { op
         />
         <TextField label="Par level" value={values.par_level} onChange={(e) => set('par_level', e.target.value)} error={errors.par_level} inputMode="decimal" hint="Reorder when stock is at or below this." />
         <TextField label="Where the par came from" value={values.par_source_note} onChange={(e) => set('par_source_note', e.target.value)} error={errors.par_source_note} placeholder="Optional" />
-        <SelectField label="Supplier" value={values.supplier_id} onChange={(e) => set('supplier_id', e.target.value)} placeholder="No supplier" options={(suppliers.data ?? []).map((s) => ({ value: String(s.id), label: s.name }))} />
+        {can('purchasing:view') && (
+          <SelectField label="Supplier" value={values.supplier_id} onChange={(e) => set('supplier_id', e.target.value)} placeholder="No supplier" options={(suppliers.data ?? []).map((s) => ({ value: String(s.id), label: s.name }))} />
+        )}
         <SelectField label="Status" value={values.status} onChange={(e) => set('status', e.target.value)} options={ITEM_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))} />
         <TextField label="Location" value={values.location} onChange={(e) => set('location', e.target.value)} error={errors.location} maxLength={80} placeholder="e.g. Back freezer" />
         <TextField label="Reorder link" type="url" inputMode="url" value={values.reorder_url} onChange={(e) => set('reorder_url', e.target.value)} error={errors.reorder_url} placeholder="https://" hint="The supplier page for this exact product." />

@@ -1,4 +1,4 @@
-import type { InventoryItem, Role, UserProfile } from './types';
+import type { BackendFeatures, InventoryItem, Role, UserProfile } from './types';
 
 export type Action =
   | 'item:read'
@@ -12,12 +12,13 @@ export type Action =
   | 'user:manage'
   | 'settings:manage'
   | 'audit:read'
-  | 'export';
+  | 'export'
+  | 'purchasing:view';
 
 const ROLE_ACTIONS: Record<Role, ReadonlySet<Action>> = {
-  admin: new Set<Action>(['item:read', 'item:count', 'item:edit', 'item:create', 'item:delete', 'supplier:manage', 'po:manage', 'po:receive', 'user:manage', 'settings:manage', 'audit:read', 'export']),
-  staff: new Set<Action>(['item:read', 'item:count', 'po:receive', 'export']),
-  viewer: new Set<Action>(['item:read', 'export']),
+  admin: new Set<Action>(['item:read', 'item:count', 'item:edit', 'item:create', 'item:delete', 'supplier:manage', 'po:manage', 'po:receive', 'user:manage', 'settings:manage', 'audit:read', 'export', 'purchasing:view']),
+  staff: new Set<Action>(['item:read', 'item:count', 'po:receive', 'export', 'purchasing:view']),
+  viewer: new Set<Action>(['item:read', 'export', 'purchasing:view']),
 };
 
 export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', staff: 'Staff', viewer: 'Viewer' };
@@ -27,7 +28,22 @@ export const ROLE_DESCRIPTION: Record<Role, string> = {
   viewer: 'Read-only access to their categories.',
 };
 
-type Who = Pick<UserProfile, 'role' | 'categories'> & { pending?: boolean };
+type Who = Pick<UserProfile, 'role' | 'categories'> & Partial<Pick<UserProfile, 'pending' | 'features'>>;
+
+/** Actions that need parts of the database added by the 2.0 update. */
+const NEEDS: Partial<Record<Action, keyof BackendFeatures>> = {
+  'purchasing:view': 'purchasing',
+  'supplier:manage': 'purchasing',
+  'po:manage': 'purchasing',
+  'po:receive': 'purchasing',
+  'audit:read': 'audit',
+};
+
+/** True when the action needs a database feature that isn't there yet. */
+export function waitingForUpdate(user: Who | null, action: Action): boolean {
+  const feature = NEEDS[action];
+  return !!(feature && user?.features && !user.features[feature]);
+}
 
 export function canAccessCategory(user: Who | null, category: string): boolean {
   if (!user || user.pending) return false;
@@ -42,6 +58,7 @@ export function canAccessCategory(user: Who | null, category: string): boolean {
 export function can(user: Who | null, action: Action, item?: Pick<InventoryItem, 'category'>): boolean {
   if (!user || user.pending) return false;
   if (!ROLE_ACTIONS[user.role].has(action)) return false;
+  if (waitingForUpdate(user, action)) return false;
   if (item && !canAccessCategory(user, item.category)) return false;
   return true;
 }

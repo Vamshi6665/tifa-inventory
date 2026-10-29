@@ -4,7 +4,8 @@ Status: ✅ done and verified · 🟡 done, needs a step in your environment · 
 
 ## Code and tests
 - ✅ TypeScript strict, no type errors; ESLint (incl. accessibility rules) clean
-- ✅ 222 Vitest tests and 30 Playwright tests passing
+- ✅ 241 Vitest tests and 30 Playwright tests passing
+- ✅ Runs on the existing database before the migration (v1-compatible mode, tested)
 - ✅ Migration and permission rules tested against a reconstruction of the v1 database in real Postgres (PGlite)
 - ✅ Quantity rules tested against the shop's 1,721 real count values
 - ✅ CI workflow: typecheck, lint, contrast, tests with coverage, bundle budget, E2E

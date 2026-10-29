@@ -1,6 +1,18 @@
 # Rolling out 2.0
 
-The live site keeps running from `main` until the pull request is merged. Pull-request previews on Vercel use sample data (see "Preview deployments"), so nothing here touches the shop's data until step 3.
+## Two stages
+
+**Stage 1: the new app on the existing database (no database changes).** 2.0 can go live before the migration. At startup it checks whether the 2.0 tables exist. Until they do, it reads and writes the v1 tables the same way `dashboard.html` did:
+
+- Counts update `inventory_items` and add a row to `inventory_counts`.
+- Approvals change `profiles` and `category_access` directly.
+- The existing v1 policies decide who can do what.
+
+Purchase orders, suppliers, the activity log and the Viewer role stay hidden, with a note explaining that they turn on after the update. Everything else works: overview, inventory, counting, reorder suggestions, schedules and vendor links, analytics, exports and team approvals.
+
+**Stage 2: the database update.** Run the migration below whenever you're ready. The app notices on its next load and switches on the remaining features. No redeploy is needed.
+
+Pull-request previews on Vercel use sample data (see "Preview deployments").
 
 ## What the migration does
 
@@ -39,14 +51,14 @@ If anything differs, update `baseline.sql` to match and run `npm run test:db` be
 3. In Vercel, add `VITE_DATA_SOURCE=supabase`, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the **Preview** environment, pointing at staging, and redeploy the preview.
 4. Sign in as an admin and as an employee: count something, approve a test sign-up, create and receive an order, export to Excel.
 
-## 3. Cutover
-
-Do these together, because v1's inline edits by employees stop working once the new policies are in place:
+## 3. Running it on production
 
 1. Back up the database.
-2. Run the migration on production.
-3. Merge the pull request. Vercel builds and deploys 2.0, and old links (`/login.html`, `/dashboard.html`) redirect to the new pages.
-4. Smoke test: sign in, open Inventory, record one count, check it in Activity.
+2. Run the migration in the SQL editor.
+3. Reload the app. Purchase orders, suppliers and Activity appear in the menu.
+4. Smoke test: record one count and check it in Activity.
+
+`/login.html` (the address registered for Google sign-in) opens the new sign-in page, and `/dashboard.html` redirects to the overview.
 
 ## Settings
 
@@ -57,7 +69,7 @@ Do these together, because v1's inline edits by employees stop working once the 
 | `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Vercel, Production (and Preview if wanted) | Server only, for `/api/assistant`. Without them the assistant answers from local rules |
 | `ASSISTANT_MODEL` | Vercel, optional | Defaults to `claude-haiku-5-5` |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Vercel, optional | Shared rate limit for the assistant |
-| Redirect URLs | Supabase → Authentication → URL Configuration | Add `https://tifa-inventory.vercel.app/**` so Google sign-in returns to the new pages |
+| Redirect URLs | Supabase → Authentication → URL Configuration | Nothing to change: Google sign-in returns to `/login.html`, the address v1 already registered |
 
 ## Preview deployments
 
@@ -67,3 +79,4 @@ Vercel builds every push to the pull request. Previews use the in-browser sample
 
 - **App:** redeploy the previous Vercel deployment (one click), or revert the merge. The old HTML pages still work against the migrated schema for admins, because nothing was renamed or dropped. The one exception is v1's "Reject" button, which deletes the profile directly; use the database function `reject_member` or turn the request down in 2.0.
 - **Employees on v1 after the migration:** v1 updates items directly, which the new policies only allow for admins. If you must run v1 for a while, temporarily add back an update policy for employees on `inventory_items` and an insert policy on `inventory_counts`.
+- **Before the migration** there is nothing to roll back in the database: stage 1 makes no schema changes.

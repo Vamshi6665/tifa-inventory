@@ -1,8 +1,8 @@
 import { lazy, type ReactNode } from 'react';
 import { createBrowserRouter, createMemoryRouter, Navigate, useLocation, useRouteError, isRouteErrorResponse, Link, type RouteObject } from 'react-router';
-import { IconLock, IconAlertTriangle, IconMapOff } from '@tabler/icons-react';
+import { IconLock, IconAlertTriangle, IconMapOff, IconDatabase } from '@tabler/icons-react';
 import { useAuth } from '@/features/auth/AuthProvider';
-import type { Action } from '@/domain/permissions';
+import { waitingForUpdate, type Action } from '@/domain/permissions';
 import { Button, EmptyState, Spinner } from '@/design-system';
 import { AppShell } from './shell/AppShell';
 import { Logo } from './shell/Logo';
@@ -25,7 +25,7 @@ const pages = {
 
 /** Starts downloading the page for a URL in parallel with auth and data, instead of after. */
 export function preloadRoute(pathname: string) {
-  const key = pathname.split('/')[1] ?? '';
+  const key = (pathname.split('/')[1] ?? '').replace(/\.html$/, '');
   void (pages[key as keyof typeof pages] ?? pages[''])().catch(() => undefined);
 }
 
@@ -75,7 +75,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function RequirePermission({ action, children }: { action: Action; children: ReactNode }) {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
+  if (waitingForUpdate(profile, action)) {
+    return (
+      <EmptyState icon={<IconDatabase />} title="Turns on after the database update" action={<Button asChild variant="secondary"><Link to="/">Back to overview</Link></Button>}>
+        This part of Tifa Inventory needs a few new tables in the database. Once the update in docs/MIGRATION.md has been run, it appears here automatically.
+      </EmptyState>
+    );
+  }
   if (!can(action)) {
     return (
       <EmptyState icon={<IconLock />} title="This page is for admins" action={<Button asChild variant="secondary"><Link to="/">Back to overview</Link></Button>}>
@@ -125,6 +132,8 @@ function makeRouter(routes: RouteObject[]) {
 
 export const router = makeRouter([
   { path: '/login', element: <LoginPage />, errorElement: <RouteError /> },
+  // v1's sign-in address, still registered with Supabase Auth for Google sign-in.
+  { path: '/login.html', element: <LoginPage />, errorElement: <RouteError /> },
   {
     path: '/',
     element: (
@@ -139,10 +148,10 @@ export const router = makeRouter([
       { path: 'inventory/:itemId', element: <InventoryPage /> },
       { path: 'count', element: <RequirePermission action="item:count"><CountPage /></RequirePermission> },
       { path: 'reorder', element: <ReorderPage /> },
-      { path: 'orders', element: <OrdersPage /> },
-      { path: 'orders/:orderId', element: <OrdersPage /> },
-      { path: 'suppliers', element: <SuppliersPage /> },
-      { path: 'suppliers/:supplierId', element: <SuppliersPage /> },
+      { path: 'orders', element: <RequirePermission action="purchasing:view"><OrdersPage /></RequirePermission> },
+      { path: 'orders/:orderId', element: <RequirePermission action="purchasing:view"><OrdersPage /></RequirePermission> },
+      { path: 'suppliers', element: <RequirePermission action="purchasing:view"><SuppliersPage /></RequirePermission> },
+      { path: 'suppliers/:supplierId', element: <RequirePermission action="purchasing:view"><SuppliersPage /></RequirePermission> },
       { path: 'analytics', element: <AnalyticsPage /> },
       { path: 'reports', element: <RequirePermission action="export"><ReportsPage /></RequirePermission> },
       { path: 'activity', element: <RequirePermission action="audit:read"><ActivityPage /></RequirePermission> },

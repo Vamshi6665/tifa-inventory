@@ -22,8 +22,9 @@ export async function makeSource(role: Role | null = 'admin') {
 }
 
 /** Renders the real app routes at a URL, signed in with a demo role. */
-export async function renderApp(path: string, role: Role | null = 'admin') {
+export async function renderApp(path: string, role: Role | null = 'admin', before?: (source: Awaited<ReturnType<typeof makeSource>>) => void) {
   const source = await makeSource(role);
+  before?.(source);
   const router = createMemoryRouter(appRouter.routes, { initialEntries: [path] });
   const user = userEvent.setup();
   const utils = render(

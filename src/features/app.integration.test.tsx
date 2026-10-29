@@ -239,6 +239,37 @@ describe('team, activity and settings', () => {
   });
 });
 
+describe('before the database update', () => {
+  const v1 = (source: { db(): { profiles: Array<{ features?: unknown }> } }) => {
+    for (const p of source.db().profiles) p.features = { purchasing: false, audit: false, viewerRole: false };
+  };
+
+  it('hides purchasing and the activity log, and explains why if someone opens them', async () => {
+    const { user } = await renderApp('/', 'admin', v1);
+    await waitForPage(/Good/);
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).queryByRole('link', { name: /Purchase orders/ })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: /Suppliers/ })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: /Activity/ })).toBeNull();
+    expect(within(nav).getByRole('link', { name: /Stock count/ })).toBeInTheDocument();
+    await user.click(within(nav).getByRole('link', { name: /Reorder/ }));
+    expect(await screen.findByText(/turn on after the database update/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create draft order/ })).toBeNull();
+  });
+
+  it('shows a notice instead of an error on purchasing pages', async () => {
+    await renderApp('/orders', 'admin', v1);
+    expect(await screen.findByRole('heading', { name: 'Turns on after the database update' })).toBeInTheDocument();
+  });
+
+  it('offers only Admin and Staff when approving someone', async () => {
+    const { user } = await renderApp('/team', 'admin', v1);
+    await user.click(await screen.findByRole('button', { name: 'Approve Maya Ortiz' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve Maya Ortiz' });
+    expect(within(dialog).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['admin', 'staff']);
+  });
+});
+
 describe('command palette', () => {
   it('opens with Ctrl+K, finds an item and navigates to it', async () => {
     const { user, router } = await renderApp('/');

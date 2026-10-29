@@ -106,8 +106,19 @@ export interface UserProfile {
   categories: string[] | null;
   /** Signed in but not approved yet: no access until an admin approves them. */
   pending: boolean;
+  /** What the connected database supports. Missing means everything (the demo, or after the 2.0 update). */
+  features?: BackendFeatures;
   created_at: string;
   last_seen_at: string | null;
+}
+
+export interface BackendFeatures {
+  /** Suppliers and purchase orders. */
+  purchasing: boolean;
+  /** The activity (audit) log. */
+  audit: boolean;
+  /** The read-only Viewer role. */
+  viewerRole: boolean;
 }
 
 export type AuditAction = 'insert' | 'update' | 'delete';

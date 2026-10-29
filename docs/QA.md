@@ -7,15 +7,16 @@
 | Quantity rules, forecasting, reorder, permissions, search, CSV, dates | Vitest | 93 | Pass |
 | Quantity rules against the shop's real import (194 distinct values, 450 items) | Vitest | 5 | Pass |
 | Data grid component | Vitest + Testing Library | 13 | Pass |
-| Page integration (real routes, demo backend, three roles, approvals) | Vitest + Testing Library | 22 | Pass |
+| Page integration (real routes, demo backend, three roles, approvals, pre-update mode) | Vitest + Testing Library | 25 | Pass |
 | Demo backend rules (mirror of RLS) | Vitest | 17 | Pass |
 | Supabase adapter (paging, live column names, v1 roles, errors) | Vitest | 11 | Pass |
+| Running on the v1 database before the update (v1-style writes, features off, approvals) | Vitest | 16 | Pass |
 | Assistant (local answers) | Vitest | 7 | Pass |
 | Accessibility per page (jsdom) | axe-core | 12 | Pass |
 | Assistant API endpoint | Vitest (node) | 10 | Pass |
 | Design-token contrast | Vitest + script | 1 (100 checks) | Pass |
 | Migration and RLS on a reconstruction of the v1 database | Vitest + PGlite (real Postgres) | 31 | Pass |
-| **Vitest total** | | **222** | **Pass** |
+| **Vitest total** | | **241** | **Pass** |
 | End-to-end flows, axe in both themes, keyboard, 10 breakpoints, live updates, 5,000 rows | Playwright (Chromium) | 30 | Pass |
 | Lighthouse, 8 pages × 2 form factors | Lighthouse 13 | 16 runs | See PERFORMANCE.md |
 | Static analysis | TypeScript strict, ESLint + jsx-a11y | — | Clean |

@@ -5,7 +5,7 @@
 | v1 debt | 2.0 |
 |---|---|
 | One ~2,700-line HTML file mixing markup, styles and logic | Feature folders, typed components, pure domain modules |
-| No automated tests; correctness checked by hand | 252 automated tests across unit, integration, database and browser |
+| No automated tests; correctness checked by hand | 271 automated tests across unit, integration, database and browser |
 | Copy-pasted logic for stock state and par checks; first-number parsing misread 7 real items | One `parseQuantity` / `stockState`, tested against the shop's real values |
 | Hand-edited colours drifting between pages | Token file with contrast checks in CI |
 | Pagination fix applied in one place (Trends) | Pagination centralised in the data layer and tested |

@@ -41,8 +41,8 @@ export const NAV: NavGroup[] = [
   {
     label: 'Purchasing',
     items: [
-      { to: '/orders', label: 'Purchase orders', icon: IconFileInvoice, description: 'Drafts, sent orders and deliveries', badge: 'orders' },
-      { to: '/suppliers', label: 'Suppliers', icon: IconBuildingStore, description: 'Who you buy from and lead times' },
+      { to: '/orders', label: 'Purchase orders', icon: IconFileInvoice, description: 'Drafts, sent orders and deliveries', badge: 'orders', requires: 'purchasing:view' },
+      { to: '/suppliers', label: 'Suppliers', icon: IconBuildingStore, description: 'Who you buy from and lead times', requires: 'purchasing:view' },
     ],
   },
   {

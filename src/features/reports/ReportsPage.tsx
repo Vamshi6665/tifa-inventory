@@ -118,7 +118,7 @@ export default function ReportsPage() {
             </div>
           }
         />
-        <ReportRow title="Purchase orders" body="All orders with a second sheet of line items." action={<Button icon={<IconFileSpreadsheet />} loading={busy === 'po'} onClick={() => void run('po', ordersXlsx, 'Orders downloaded')}>Download Excel</Button>} />
+        {can('purchasing:view') && <ReportRow title="Purchase orders" body="All orders with a second sheet of line items." action={<Button icon={<IconFileSpreadsheet />} loading={busy === 'po'} onClick={() => void run('po', ordersXlsx, 'Orders downloaded')}>Download Excel</Button>} />}
         {can('audit:read') && <ReportRow title="Activity log" body="Who changed what and when, for the last 2,000 changes." action={<Button icon={<IconFileTypeCsv />} loading={busy === 'audit'} onClick={() => void run('audit', auditCsv, 'Activity log downloaded')}>Download CSV</Button>} />}
       </Group>
 

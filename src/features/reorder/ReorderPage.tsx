@@ -5,6 +5,7 @@ import { Badge, Button, EmptyState, PageHeader, Panel, SelectField, Skeleton, St
 import { useRestock } from '@/data/derived';
 import { useCreateOrder, useItems, useSchedules, useSetSchedule, useSuppliers } from '@/data/hooks';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { waitingForUpdate } from '@/domain/permissions';
 import { DEFAULT_FREQUENCY, REASON_LABEL, groupKey, scheduleRow, type RestockSuggestion } from '@/domain/reorder';
 import { formatRate } from '@/domain/trends';
 import { formatWhen } from '@/domain/dates';
@@ -84,6 +85,8 @@ export default function ReorderPage() {
 
 function SupplierGroup({ supplierId, supplierName, leadTime, list, canOrder }: { supplierId: number | null; supplierName?: string; leadTime: number | null; list: RestockSuggestion[]; canOrder: boolean }) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const waiting = waitingForUpdate(profile, 'purchasing:view');
   const schedules = useSchedules();
   const create = useCreateOrder();
   const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(list.map((s) => [s.item.id, s.forecast.suggestedQty ? String(s.forecast.suggestedQty) : ''])));
@@ -96,7 +99,7 @@ function SupplierGroup({ supplierId, supplierName, leadTime, list, canOrder }: {
       id={headingId}
       padded={false}
       title={supplierName ?? 'No supplier set'}
-      description={supplierId == null ? 'Assign suppliers to these items to order them together.' : `${list.length} ${list.length === 1 ? 'item' : 'items'}${leadTime ? `, usually arrives in ${leadTime} days` : ''}`}
+      description={supplierId == null ? (canOrder || !waiting ? 'Assign suppliers to these items to order them together.' : 'Order these from your usual vendors; suppliers and purchase orders turn on after the database update.') : `${list.length} ${list.length === 1 ? 'item' : 'items'}${leadTime ? `, usually arrives in ${leadTime} days` : ''}`}
       actions={
         canOrder &&
         supplierId != null && (

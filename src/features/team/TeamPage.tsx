@@ -111,6 +111,7 @@ function AccessDialog({ editing, isSelf, onClose }: { editing: Editing | null; i
   const update = useUpdateProfile();
   const categories = useMemo(() => [...new Set((items.data ?? []).map((i) => i.category))].sort(), [items.data]);
   const [role, setRole] = useState<Role>('staff');
+  const viewerRole = useAuth().profile?.features?.viewerRole ?? true;
   const [cats, setCats] = useState<string[]>([]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const person = editing?.person ?? null;
@@ -155,7 +156,7 @@ function AccessDialog({ editing, isSelf, onClose }: { editing: Editing | null; i
       >
         <fieldset className={styles.fieldset}>
           <legend className={styles.legend}>Role</legend>
-          {(['admin', 'staff', 'viewer'] as Role[]).map((r) => (
+          {(viewerRole ? (['admin', 'staff', 'viewer'] as Role[]) : (['admin', 'staff'] as Role[])).map((r) => (
             <label key={r} className={styles.radio}>
               <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} disabled={isSelf && r !== 'admin'} />
               <span>

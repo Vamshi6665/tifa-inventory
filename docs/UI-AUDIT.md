@@ -8,7 +8,7 @@
 | 2 | Global | Names and messages are inserted with `innerHTML` without escaping (item names, categories, people's names, database error text) | e.g. lines 856, 1099, 2090 | High | P1 | React escapes all text; raw HTML is banned by lint (see SECURITY.md S8) |
 | 3 | Dashboard | One 2,705-line file holds markup, styles and logic; every render rebuilds the whole table and re-attaches listeners | `render()` lines 1023–1159 | High | P1 | Feature folders, typed components, a shared data grid with targeted updates |
 | 4 | Dashboard | Quantity rule takes the first number anywhere in the text, so "1new+.75" reads as 1 and "Tifa logo-1 boxes" as −1 | `parseValue()` line 825 | High | P1 | Parser checked against all 1,721 real values: same number for 95%, fixes 7 wrong alerts, flags 25 ambiguous entries (quantity.real.test.ts) |
-| 5 | Dashboard | No automated tests | repository | High | P1 | 222 Vitest + 30 Playwright tests |
+| 5 | Dashboard | No automated tests | repository | High | P1 | 241 Vitest + 30 Playwright tests |
 | 6 | Browse | Search matches item names only, and tables can't be sorted, filtered by value, or have columns hidden | line 1092 | Medium | P2 | `DataGrid`: search across item, group, location and supplier; sort, filters, columns, saved views |
 | 7 | Browse | Delete is a trash icon on every row, and deleting an item deletes its count history (`on delete cascade`) | line 1130; schema | High | P1 | Delete is admin-only behind a confirm that suggests "Retired" instead; history is append-only |
 | 8 | Browse | Every row has a status dropdown, so a mis-tap retires an item; employees can change status too | line 1120 | Medium | P2 | Status is edited by admins only, and changes are logged with who made them |
