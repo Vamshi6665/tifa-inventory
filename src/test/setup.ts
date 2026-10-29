@@ -1,8 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 afterEach(() => cleanup());
+
+// CI runners with coverage on are several times slower than a laptop; the
+// default 1 s wait for async UI made page tests flaky there.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom gaps used by Radix, cmdk and the virtualizer.
 class RO { observe() {} unobserve() {} disconnect() {} }
