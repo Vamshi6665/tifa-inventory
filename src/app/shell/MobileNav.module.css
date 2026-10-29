@@ -1,0 +1,117 @@
+.bar {
+  display: none;
+}
+@media (max-width: 768px) {
+  .bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-nav);
+    display: block;
+    padding: var(--space-1) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
+    border-top: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  }
+}
+.list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  max-width: 560px;
+  margin: 0 auto;
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-3);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.iconWrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.iconWrap svg {
+  width: 22px;
+  height: 22px;
+}
+.active {
+  color: var(--color-text);
+}
+.active .iconWrap {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+}
+.primary .iconWrap {
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+}
+.primary.active .iconWrap {
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+.badge {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-warning-fill);
+}
+.label {
+  line-height: 1.2;
+}
+
+.moreList {
+  display: grid;
+  gap: var(--space-1);
+}
+.moreLink {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.moreLink:hover,
+.moreActive {
+  background: var(--color-hover);
+}
+.moreLink svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  color: var(--color-text-2);
+}
+.moreLabel {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+.moreDesc {
+  display: block;
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}

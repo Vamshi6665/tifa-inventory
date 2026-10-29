@@ -1,0 +1,220 @@
+.nameLink {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.nameLink:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+}
+.qty {
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: var(--color-text-3);
+}
+.stale {
+  color: var(--color-warning);
+}
+
+/* Mobile card */
+.mCard {
+  display: grid;
+  flex: 1;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.mTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.mName {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.mName::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.mSub {
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+.mBottom {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+}
+.mQty {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Drawer */
+.drawerTop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.stockCard {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-4);
+  align-items: end;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+}
+.bigQty {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  font-stretch: var(--stretch-condensed);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.qtyLabel {
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+.stockMeta {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  color: var(--color-text-2);
+  font-size: var(--text-xs);
+}
+.meterRow {
+  grid-column: 1 / -1;
+}
+.countForm {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  align-items: end;
+  margin-top: var(--space-3);
+}
+.actionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.section {
+  margin-top: var(--space-5);
+}
+.sectionTitle {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-md);
+}
+.forecast {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.fStat {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+}
+.fValue {
+  display: block;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.fLabel {
+  color: var(--color-text-3);
+  font-size: var(--text-2xs);
+}
+.explain {
+  margin-top: var(--space-2);
+  color: var(--color-text-2);
+  font-size: var(--text-xs);
+}
+.details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+.details dt {
+  color: var(--color-text-3);
+}
+.details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.timeline {
+  display: grid;
+  gap: 0;
+}
+.tItem {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-xs);
+}
+.tItem:last-child {
+  border-bottom: 0;
+}
+.tDot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+}
+.tDotReceived {
+  background: var(--color-accent);
+}
+.tValue {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+.tMeta {
+  color: var(--color-text-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 640px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .forecast {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.extLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-accent-text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.extLink:hover {
+  text-decoration: underline;
+}
