@@ -1,0 +1,92 @@
+.group + .group {
+  margin-top: var(--space-6);
+}
+.groupTitle {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
+}
+.list {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+}
+.row + .row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+.text {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.title {
+  font-size: var(--text-md);
+}
+.body {
+  color: var(--color-text-2);
+  font-size: var(--text-xs);
+}
+.action {
+  flex: none;
+}
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.inline > div:first-child {
+  min-width: 200px;
+}
+@media (max-width: 640px) {
+  .row {
+    padding: var(--space-4);
+  }
+  .action, .inline {
+    width: 100%;
+  }
+}
+
+.print {
+  display: none;
+}
+@media print {
+  :global(body.printing) > :global(#root) {
+    display: none;
+  }
+  :global(body.printing) .print {
+    display: block;
+    color: #000;
+    font-size: 11pt;
+  }
+  .print h1 {
+    font-size: 16pt;
+    margin-bottom: 4pt;
+  }
+  .print p {
+    margin-bottom: 12pt;
+  }
+  .print table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .print th,
+  .print td {
+    padding: 5pt 6pt;
+    border: 0.5pt solid #999;
+    text-align: left;
+  }
+  .print tr {
+    break-inside: avoid;
+  }
+  .blank {
+    width: 25%;
+  }
+}

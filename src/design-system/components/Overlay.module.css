@@ -1,0 +1,189 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  animation: fadeIn var(--duration-base) var(--ease-out);
+}
+
+.content {
+  position: fixed;
+  z-index: var(--z-dialog);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--glass-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  outline: none;
+}
+
+/* The dialog container takes focus on open so reading starts at its title; the ring belongs on controls. */
+.content:focus-visible {
+  outline: none;
+}
+
+.center {
+  top: 50%;
+  left: 50%;
+  width: calc(100vw - 32px);
+  border-radius: var(--radius-lg);
+  transform: translate(-50%, -50%);
+  animation: dialogIn var(--duration-slow) var(--ease-spring);
+}
+.sm { max-width: 420px; }
+.md { max-width: 560px; }
+.lg { max-width: 760px; }
+
+.sheet {
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: min(560px, calc(100vw - 16px));
+  max-height: none;
+  border-radius: var(--radius-lg);
+  animation: sheetIn var(--duration-slow) var(--ease-out);
+}
+.sheet.lg { width: min(720px, calc(100vw - 16px)); }
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+.titles { min-width: 0; }
+.title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+}
+.description {
+  margin-top: var(--space-1);
+  color: var(--color-text-2);
+}
+.confirmText {
+  margin-top: var(--space-2);
+  color: var(--color-text-2);
+}
+.close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -4px -8px 0 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-3);
+}
+.close:hover { background: var(--color-hover); color: var(--color-text); }
+.close svg { width: 18px; height: 18px; }
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-2) var(--space-5) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-2);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* Phones: dialogs become bottom sheets */
+@media (max-width: 640px) {
+  .center, .sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 48px);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transform: none;
+    animation: sheetUp var(--duration-slow) var(--ease-out);
+  }
+  .footer {
+    border-radius: 0;
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+  .footer > * { flex: 1; }
+}
+
+/* ---------- Menu / popover / tooltip ---------- */
+.menu, .popover {
+  z-index: var(--z-popover);
+  min-width: 200px;
+  padding: var(--space-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-strong);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: var(--shadow-lg);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin));
+  animation: popIn var(--duration-base) var(--ease-out);
+}
+.popover {
+  padding: 0;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: default;
+  outline: none;
+  user-select: none;
+}
+.menuItem[data-highlighted] { background: var(--color-active); }
+.menuItem[data-disabled] { opacity: 0.45; }
+.menuDanger { color: var(--color-danger); }
+.menuIcon { display: inline-flex; color: var(--color-text-3); }
+.menuDanger .menuIcon { color: inherit; }
+.menuIcon svg { width: 16px; height: 16px; }
+.menuLabel { flex: 1; }
+.menuShortcut { color: var(--color-text-3); font-size: var(--text-2xs); }
+.separator {
+  height: 1px;
+  margin: var(--space-1) calc(var(--space-1) * -1);
+  background: var(--color-border-subtle);
+}
+
+.tooltip {
+  z-index: var(--z-tooltip);
+  max-width: 280px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  box-shadow: var(--shadow-md);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes popIn { from { opacity: 0; transform: scale(0.96); } }
+@keyframes dialogIn { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } }
+@keyframes sheetIn { from { opacity: 0; transform: translateX(24px); } }
+@keyframes sheetUp { from { transform: translateY(100%); } }

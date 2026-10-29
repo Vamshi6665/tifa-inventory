@@ -1,0 +1,242 @@
+[
+  {
+    "run": "desktop-analytics",
+    "fetchTime": "2026-10-29T16:25:58.346Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.7 s",
+    "tbt": "0 ms",
+    "cls": "0.006"
+  },
+  {
+    "run": "desktop-count",
+    "fetchTime": "2026-10-29T16:25:23.156Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.7 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-inventory",
+    "fetchTime": "2026-10-29T16:25:10.874Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.8 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-login",
+    "fetchTime": "2026-10-29T16:24:48.049Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.3 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-orders",
+    "fetchTime": "2026-10-29T16:25:46.758Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.8 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-overview",
+    "fetchTime": "2026-10-29T16:24:59.064Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.7 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-reorder",
+    "fetchTime": "2026-10-29T16:25:34.922Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.7 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "desktop-settings",
+    "fetchTime": "2026-10-29T16:26:10.892Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "0.3 s",
+    "lcp": "0.7 s",
+    "tbt": "0 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-analytics",
+    "fetchTime": "2026-10-29T16:24:24.146Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 92,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.0 s",
+    "tbt": "180 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-count",
+    "fetchTime": "2026-10-29T16:23:49.172Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.2 s",
+    "tbt": "50 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-inventory",
+    "fetchTime": "2026-10-29T16:23:37.361Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 86,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.6 s",
+    "tbt": "240 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-login",
+    "fetchTime": "2026-10-29T16:23:14.496Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "1.0 s",
+    "tbt": "30 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-orders",
+    "fetchTime": "2026-10-29T16:24:12.511Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 91,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.3 s",
+    "tbt": "140 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-overview",
+    "fetchTime": "2026-10-29T16:23:25.607Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.2 s",
+    "tbt": "40 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-reorder",
+    "fetchTime": "2026-10-29T16:24:00.798Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.2 s",
+    "tbt": "80 ms",
+    "cls": "0"
+  },
+  {
+    "run": "mobile-settings",
+    "fetchTime": "2026-10-29T16:24:36.584Z",
+    "lighthouse": "13.6.0",
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 63
+    },
+    "fcp": "1.0 s",
+    "lcp": "3.2 s",
+    "tbt": "50 ms",
+    "cls": "0"
+  }
+]

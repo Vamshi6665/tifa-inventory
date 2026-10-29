@@ -1,0 +1,215 @@
+/*
+ * Tifa design tokens.
+ * Light: frosted display-case glass. Dark: cacao. One accent — Tifa green.
+ * Every text/background pair is verified by scripts/contrast.mjs (WCAG 2.2 AA).
+ */
+
+:root {
+  /* ---------- Type ---------- */
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Scale (px at 16px root): 12 · 13 · 14 · 15 · 17 · 20 · 24 · 30 · 38 */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
+  --text-display: clamp(1.875rem, 1.4rem + 2vw, 2.375rem);
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+
+  --weight-regular: 420;
+  --weight-medium: 520;
+  --weight-semibold: 600;
+  --weight-bold: 680;
+
+  /* Width axis: condensed figures for big numbers, normal for reading. */
+  --stretch-condensed: 80%;
+  --stretch-normal: 100%;
+
+  /* ---------- Space (8-point grid, 4px half-step) ---------- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* ---------- Radius: hierarchy, not one value everywhere ---------- */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 999px;
+
+  /* ---------- Layout ---------- */
+  --sidebar-width: 248px;
+  --sidebar-collapsed: 64px;
+  --topbar-height: 56px;
+  --content-max: 1440px;
+  --row-height: 44px;
+  --control-height: 36px;
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+
+  /* ---------- Layers ---------- */
+  --z-sticky: 10;
+  --z-nav: 30;
+  --z-overlay: 50;
+  --z-dialog: 60;
+  --z-popover: 70;
+  --z-toast: 80;
+  --z-tooltip: 90;
+
+  color-scheme: light;
+}
+
+/* ===================== Light ===================== */
+:root,
+[data-theme='light'] {
+  --color-bg: #f4f7f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7faf8;
+  --color-sunken: #ebf1ed;
+  --color-hover: rgba(13, 36, 24, 0.045);
+  --color-active: rgba(13, 36, 24, 0.08);
+  --color-selected: rgba(31, 154, 98, 0.1);
+
+  --color-text: #0d2418;
+  --color-text-2: #3a5c47;
+  --color-text-3: #557362;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #d9e3dd;
+  --color-border-subtle: #e6ede9;
+  --color-border-strong: #78907f;
+
+  --color-brand: #2aae72;
+  --color-accent: #1f9a62;
+  --color-accent-strong: #17784d;
+  --color-accent-text: #17784d;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #e4f6ec;
+  --color-focus: #1f9a62;
+
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-warning: #8f5200;
+  --color-warning-fill: #c27c00;
+  --color-warning-soft: #fff3dd;
+  --color-review: #6941c6;
+  --color-review-soft: #f1ecfd;
+  --color-info: #1d5fd1;
+  --color-info-soft: #e8f0fd;
+
+  /* Stock meter */
+  --meter-track: #e3ebe6;
+  --meter-ok: var(--color-accent);
+  --meter-low: var(--color-warning-fill);
+  --meter-out: var(--color-danger);
+  --meter-par: #0d2418;
+
+  /* Glass stays legible over busy content: the blur is a finish, not the backdrop. */
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-strong: rgba(255, 255, 255, 0.96);
+  --glass-border: rgba(13, 36, 24, 0.08);
+  --scrim: rgba(13, 36, 24, 0.32);
+
+  --shadow-sm: 0 1px 2px rgba(13, 36, 24, 0.06);
+  --shadow-md: 0 1px 2px rgba(13, 36, 24, 0.05), 0 4px 12px -2px rgba(13, 36, 24, 0.08);
+  --shadow-lg: 0 2px 4px rgba(13, 36, 24, 0.04), 0 16px 40px -8px rgba(13, 36, 24, 0.18);
+  --highlight-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  --mark-bg: rgba(229, 154, 26, 0.28);
+  --chart-grid: rgba(13, 36, 24, 0.08);
+}
+
+/* ===================== Dark (cacao) ===================== */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #1a120e;
+  --color-surface: #231914;
+  --color-surface-2: #2a1e18;
+  --color-sunken: #140d0a;
+  --color-hover: rgba(246, 237, 229, 0.05);
+  --color-active: rgba(246, 237, 229, 0.09);
+  --color-selected: rgba(60, 196, 136, 0.14);
+
+  --color-text: #f6ede5;
+  --color-text-2: #cdbbae;
+  --color-text-3: #a48f80;
+  --color-text-inverse: #1a120e;
+
+  --color-border: #3d2e25;
+  --color-border-subtle: #31241d;
+  --color-border-strong: #806b5b;
+
+  --color-brand: #3cc488;
+  --color-accent: #3cc488;
+  --color-accent-strong: #3cc488;
+  --color-accent-text: #5ad39c;
+  --color-on-accent: #0b1f14;
+  --color-accent-soft: #1b3324;
+  --color-focus: #5ad39c;
+
+  --color-danger: #ff8a7a;
+  --color-danger-soft: #42201b;
+  --color-warning: #f5b95a;
+  --color-warning-fill: #f5b95a;
+  --color-warning-soft: #3b2a13;
+  --color-review: #c2a8ff;
+  --color-review-soft: #32263f;
+  --color-info: #8db4ff;
+  --color-info-soft: #1e2a42;
+
+  --meter-track: #36281f;
+  --meter-par: #f6ede5;
+
+  --glass-bg: rgba(35, 25, 20, 0.9);
+  --glass-strong: rgba(35, 25, 20, 0.96);
+  --glass-border: rgba(246, 237, 229, 0.08);
+  --scrim: rgba(5, 3, 2, 0.6);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 16px -4px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+  --highlight-top: inset 0 1px 0 rgba(246, 237, 229, 0.05);
+
+  --mark-bg: rgba(245, 185, 90, 0.3);
+  --chart-grid: rgba(246, 237, 229, 0.08);
+}
+
+/* Density */
+[data-density='compact'] {
+  --row-height: 36px;
+  --control-height: 32px;
+}
+
+/* Reduced motion: OS setting or the in-app preference */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0.01ms;
+    --duration-base: 0.01ms;
+    --duration-slow: 0.01ms;
+  }
+}
+[data-motion='reduced'] {
+  --duration-fast: 0.01ms;
+  --duration-base: 0.01ms;
+  --duration-slow: 0.01ms;
+}

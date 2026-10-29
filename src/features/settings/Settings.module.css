@@ -1,0 +1,94 @@
+.layout {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 920px;
+}
+.section {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+@media (max-width: 760px) {
+  .section {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+}
+.title {
+  font-size: var(--text-md);
+}
+.sectionBody {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.hint {
+  display: block;
+  color: var(--color-text-3);
+  font-size: var(--text-xs);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.rowLabel {
+  font-weight: var(--weight-medium);
+}
+.views {
+  display: grid;
+}
+.view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.view:last-child {
+  border-bottom: 0;
+}
+.viewName {
+  display: block;
+  font-weight: var(--weight-medium);
+}
+.keys {
+  border-collapse: collapse;
+}
+.keys td {
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.keys tr:last-child td {
+  border-bottom: 0;
+}
+.keyCell {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.account {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+.account dt {
+  color: var(--color-text-3);
+}
+.account dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

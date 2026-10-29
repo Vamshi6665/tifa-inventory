@@ -1,8 +1,6 @@
-# tifa-inventory
-Internal inventory management for Tifa Chocolate &amp; Gelato
 # Tifa Inventory Management System
 
-A production inventory management system built for **Tifa Chocolate & Gelato** (Walnut Creek, CA) — a real, fast-moving small business. Designed to replace spreadsheets and guesswork with real-time stock tracking, reorder alerting, and admin-controlled access, running at **$0/month** in infrastructure cost.
+Inventory, stock counts, reordering and purchasing for **Tifa Chocolate & Gelato** (Walnut Creek, CA), a real, fast-moving small business. It replaced spreadsheets and guesswork with live stock tracking, reorder alerts and owner-controlled access. Version 2.0 rebuilds the original single-file dashboard as a typed React app with a tested permission model, an audit log and purchasing.
 
 🔗 **Live app:** [tifa-inventory.vercel.app](https://tifa-inventory.vercel.app)
 
@@ -10,116 +8,66 @@ A production inventory management system built for **Tifa Chocolate & Gelato** (
 
 ## Why this exists
 
-Small businesses run on spreadsheets, sticky notes, and "I think we're low on that." For a shop moving through ingredients daily, that isn't a system — it's a daily guessing game that leads to stockouts and over-ordering.
-
-This project replaces that with a lightweight, always-on inventory tool the owner actually uses to run the business — built deliberately without enterprise infrastructure, build pipelines, or recurring cost.
-
----
+Small businesses run on spreadsheets, sticky notes and "I think we're low on that." For a shop going through ingredients daily, that leads to stockouts and over-ordering. This is the tool the owner uses to run stock instead.
 
 ## Design principles
 
-- **Zero infrastructure cost.** Free tiers only, all the way down.
-- **No build step.** Plain HTML/CSS/JS served as-is — no framework overhead, no bundler, no compile stage.
-- **Real business data, not clean demo data.** Quantities are free-form text (`"6 x 5kg buckets"`), so every feature that touches quantity uses a *parse-and-flag* pattern rather than assuming clean numbers.
-- **Ship directly.** GitHub web editor → Vercel auto-deploy. No local environment required.
-- **Owner-controlled.** Row-level security and an admin gate keep write access with the business owner.
+- **Real business data, not clean demo data.** Staff write counts the way they think: `"1new+.75"`, `"2 trays"`, `"45% remaining"`. Every feature that touches quantity uses one parse-and-flag rule: read what's clear, flag the rest for a person. The rule is tested against all 1,721 count values from the shop's original import.
+- **Transparent forecasting.** Usage per day is the drop between counts divided by the days, with deliveries left out. Every suggested quantity shows its arithmetic. No black-box models.
+- **Permissions in the database.** Roles and category access are enforced by Postgres Row-Level Security, not by hiding buttons.
+- **No paid infrastructure required.** Supabase and Vercel free tiers. The optional AI assistant uses the Claude API, billed per use.
 
----
+## What it does
+
+| Area | What people do there |
+| --- | --- |
+| Overview | See what's out, low, unreadable or not counted lately, with the reason behind each insight |
+| Inventory | Search, filter, sort and edit every item, including location and reorder links; open an item for its forecast, 12-week trend and count history |
+| Stock count | Walk the shelves on a phone: type a count, press Enter, move to the next item; an empty Enter confirms the old count |
+| Reorder | Items at or below par, plus items projected to cross par before their next order, with quantities and vendor links; order schedules, order days and vendor pages per group |
+| Purchase orders | Draft → sent → received; receiving adds to plain-number counts and flags worded counts for a recount |
+| Suppliers | Contacts and lead times, which feed suggested quantities |
+| Analytics and reports | Run-out dates, fastest movers, weekly trends; Excel exports by category |
+| Activity | Audit log of every change, written by the database |
+| Team | Approve new sign-ups; set each person's role (admin, staff, viewer) and categories |
+
+Also: ⌘K command palette, notifications, saved table views, light and dark themes, live updates across devices, and an assistant that answers questions from the inventory.
 
 ## Tech stack
 
 | Layer | Choice |
-|---|---|
-| Frontend | Plain HTML / CSS / JavaScript (no build step) |
-| Charts | Chart.js |
-| Icons | Tabler Icons (webfont via CDN) |
-| Spreadsheet I/O | SheetJS |
-| Database | Supabase — PostgreSQL + Auth + Row-Level Security |
-| Serverless | Vercel serverless functions |
-| Deployment | Vercel (GitHub auto-deploy) |
-| Data import | Python scripts from Excel / CSV source files |
+| --- | --- |
+| Frontend | React 19, TypeScript (strict), Vite, React Router, TanStack Query / Table / Virtual, Radix UI |
+| Charts and export | Chart.js (loaded on demand), write-excel-file |
+| Database | Supabase: Postgres, Auth (email and Google), Row-Level Security, Realtime |
+| Serverless | One Vercel function for the assistant, which reads data with the user's own permissions |
+| Hosting | Vercel, deployed from GitHub |
+| Testing | Vitest, React Testing Library, axe-core, PGlite (real Postgres in-process), Playwright, Lighthouse |
 
----
+## Quality
 
-## Architecture
+- **271 automated tests:** 241 in Vitest (domain rules, real-data checks, components, pages, running on the existing database, and the migration and RLS on a reconstruction of it) and 30 in Playwright (flows, accessibility in both themes, 10 screen widths, keyboard use, 5,000 items).
+- **Accessibility:** no axe violations on any page in either theme; Lighthouse accessibility 100.
+- **Performance:** Lighthouse 100 on desktop; 174KB of JavaScript on first load.
 
-```
-┌─────────────────────┐        ┌──────────────────────┐
-│   Browser (client)  │        │       Supabase       │
-│  index.html + JS    │◀──────▶│  PostgreSQL + Auth    │
-│  Chart.js / Tabler  │  RLS   │  Row-Level Security   │
-└──────────┬──────────┘        │  is_admin() function  │
-           │                   └──────────────────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Vercel (hosting +  │
-│  serverless funcs)  │
-│  GitHub auto-deploy │
-└─────────────────────┘
+## Run it
+
+```bash
+npm install
+npm run dev:demo     # sample data in the browser, no backend needed
+npm run dev          # against Supabase (copy .env.example to .env.local)
+npm test             # Vitest
+npm run test:e2e     # Playwright
 ```
 
-- The client talks directly to Supabase using its JS client, with RLS enforcing who can read and write.
-- Admin-only actions are gated by the existing `is_admin()` Postgres function.
-- Deployment is fully hands-off: commit via the GitHub web editor, Vercel builds and ships automatically.
+## Deploy
+
+Vercel builds every push with `npm run build` (framework preset: Vite, output `dist`). Production uses the Supabase settings in `.env.production`; pull-request previews use sample data. The app runs on the existing database as it is; purchase orders, suppliers and the activity log switch on once the update in `supabase/migrations/` has been run (see [docs/MIGRATION.md](docs/MIGRATION.md)).
+
+## Documentation
+
+[Architecture](docs/ARCHITECTURE.md) · [Design system](docs/DESIGN-SYSTEM.md) · [UI audit](docs/UI-AUDIT.md) · [Security](docs/SECURITY.md) · [Accessibility](docs/ACCESSIBILITY.md) · [Performance](docs/PERFORMANCE.md) · [QA](docs/QA.md) · [Migration](docs/MIGRATION.md) · [Production readiness](docs/PRODUCTION-READINESS.md) · [Technical debt](docs/TECH-DEBT.md) · [Roadmap](docs/ROADMAP.md) · [Original specification](specs/inventory-system.md)
 
 ---
 
-## Data model
-
-The core inventory table is intentionally simple and reflects how the business actually records stock.
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | integer | Primary key |
-| `current_value` | text | **Free-form** quantity, e.g. `"6 x 5kg buckets"` |
-| `par_level` | numeric | Reorder threshold — the minimum before restocking |
-| *(item metadata)* | — | Name, category, and related descriptive fields |
-
-> **Key design decision — `current_value` is free-form text.**
-> Because real staff record stock in human language, quantity can't be treated as a clean number. Any feature touching quantity/reorder logic uses a **parse-and-skip** pattern: cleanly numeric values are compared against `par_level`; free-text entries are flagged for manual review rather than triggering false alarms.
-
----
-
-## Features
-
-- **Real-time stock dashboard** — current levels across every SKU at a glance.
-- **Reorder / low-stock detection** — `needsReorder()` compares parsed quantities against `par_level` and surfaces items that need restocking.
-- **Robust quantity parsing** — `parseValue()` extracts numeric quantities from free-form text and defers anything ambiguous to manual review.
-- **Admin-gated writes** — edits and administrative actions are restricted via Supabase RLS and the `is_admin()` function.
-- **Data import** — Python scripts load and reconcile inventory from existing Excel / CSV records.
-- **Visual reporting** — Chart.js visualizations for stock status.
-
-### On the roadmap
-
-- **Low-stock push notifications** — reusing the dashboard's existing `needsReorder()` logic, `parseValue()` parser, and `par_level` column to alert the owner when stock drops below threshold.
-
----
-
-## Deployment
-
-No local build or CI/CD pipeline. The workflow is:
-
-1. Edit files via the **GitHub web editor**.
-2. Commit to the repository.
-3. **Vercel auto-deploys** the new commit.
-
-Database migrations are run through the **Supabase SQL Editor**. (Note: because of connection-pooler incompatibility, some migrations use temp-table workarounds.)
-
----
-
-## Environment / configuration
-
-The client is configured with the project's Supabase URL and anonymous public key. Access control is enforced server-side by Row-Level Security and the `is_admin()` function — the anon key alone does not grant write access.
-
----
-
-## Project status
-
-**Live and in use** by the business owner as the day-to-day inventory tool. Actively developed feature-by-feature using a spec-driven workflow: each feature is scoped, its logic tested against real relative dates and the actual schema, then shipped.
-
----
-
-## About
-
-Built as both a real operational tool for Tifa Chocolate & Gelato and a portfolio project demonstrating pragmatic data engineering, applied AI-assisted development, and end-to-end system design under real-world constraints.
+Built as a working tool for Tifa Chocolate & Gelato and as a portfolio project in practical data engineering and AI-assisted development under real constraints.

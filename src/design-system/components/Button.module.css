@@ -1,0 +1,117 @@
+.button {
+  --btn-h: var(--control-height);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--btn-h);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.button:disabled {
+  opacity: 0.5;
+}
+.button svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm { --btn-h: 30px; padding: 0 var(--space-3); font-size: var(--text-xs); gap: 6px; }
+.sm svg { width: 15px; height: 15px; }
+.lg { --btn-h: 44px; padding: 0 var(--space-5); font-size: var(--text-md); }
+.block { display: flex; width: 100%; }
+
+.primary {
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent-strong) 88%, var(--color-text));
+}
+
+.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+.secondary:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-text-2);
+}
+.ghost:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.subtle {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+}
+.subtle:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-accent-soft) 80%, var(--color-accent));
+}
+
+.danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: color-mix(in oklab, var(--color-danger) 25%, transparent);
+}
+.danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-danger-soft) 80%, var(--color-danger));
+}
+
+.iconOnly {
+  width: var(--btn-h);
+  padding: 0;
+}
+
+.loading {
+  cursor: progress;
+}
+
+/* Larger hit area on touch devices (WCAG 2.5.8 target size) */
+@media (pointer: coarse) {
+  .button { --btn-h: 44px; }
+  .sm { --btn-h: 40px; }
+}
+
+.indicator {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-danger);
+  pointer-events: none;
+}

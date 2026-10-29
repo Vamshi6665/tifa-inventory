@@ -1,0 +1,9 @@
+{
+  "name": "Tifa Inventory",
+  "short_name": "Tifa",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a120e",
+  "theme_color": "#1f9a62",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
